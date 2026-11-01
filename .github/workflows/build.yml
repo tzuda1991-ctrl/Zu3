@@ -28,6 +28,8 @@ jobs:
         run: |
           mkdir -p app/src/main/java/com/teenpatti/game
 
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -1076,7 +1078,7 @@ jobs:
           EOF
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
