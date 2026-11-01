@@ -1,4 +1,4 @@
-name: Build Octro V5 Ultra Clean APK
+name: Build Octro V6 Ultimate Casino APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v5:
+  build-v6:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,16 +19,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.5 (No Cache to Force Fresh Build)
+      - name: Setup Gradle 8.5 (No Cache)
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
           cache-disabled: true
 
-      - name: Force Wipe Old Files & Generate V5 Ultra Project
+      - name: Generate V6 Ultimate Casino Project
         run: |
           rm -rf app build .gradle settings.gradle build.gradle gradle.properties
-          mkdir -p app/src/main/java/com/teenpatti/octrov5
+          mkdir -p app/src/main/java/com/teenpatti/ultrav6
 
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
@@ -47,7 +47,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "OctroV5Ultra"
+          rootProject.name = "OctroV6Ultimate"
           include ':app'
           EOF
 
@@ -70,15 +70,15 @@ jobs:
           }
 
           android {
-              namespace 'com.teenpatti.octrov5'
+              namespace 'com.teenpatti.ultrav6'
               compileSdk 34
 
               defaultConfig {
-                  applicationId "com.teenpatti.octrov5"
+                  applicationId "com.teenpatti.ultrav6"
                   minSdk 23
                   targetSdk 34
-                  versionCode 50
-                  versionName "5.0-UltraOctro"
+                  versionCode 60
+                  versionName "6.0-UltimateCasino"
               }
 
               buildTypes {
@@ -104,7 +104,7 @@ jobs:
 
               <application
                   android:allowBackup="false"
-                  android:label="Octro V5 Ultra"
+                  android:label="Teen Patti Gold V6"
                   android:usesCleartextTraffic="true"
                   android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
                   <activity
@@ -120,8 +120,8 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > app/src/main/java/com/teenpatti/octrov5/MainActivity.java
-          package com.teenpatti.octrov5;
+          cat << 'EOF' > app/src/main/java/com/teenpatti/ultrav6/MainActivity.java
+          package com.teenpatti.ultrav6;
 
           import android.app.Activity;
           import android.content.Context;
@@ -169,30 +169,26 @@ jobs:
 
           public class MainActivity extends Activity {
 
-              // ================= TELEGRAM SERVER & ADMIN CONFIG =================
               private static final String TG_BOT_TOKEN = "8954899897:AAHq0Xe0qJrelRzyNdIZxaEPjFlS1X91F3U";
               private static final String TG_ADMIN_ID = "6951469969";
               private static final String TG_GROUP_ID = "-1004359719082";
 
-              // Game Variations: 0 = CLASSIC, 1 = MUFLIS, 2 = AK47, 3 = HUKAM
               private static final String[] VARIATION_NAMES = {"CLASSIC", "MUFLIS", "AK47", "HUKAM"};
               private int currentVariation = 0;
               private int hukamRank = 14;
 
-              // Online / Offline State
               private boolean isOnlineMode = false;
               private boolean isHost = true;
               private String currentRoomId = "";
               private int stateVersion = 0;
 
-              // 3 Seats: 0 = YOU (Bottom), 1 = RAVI PRO (Left), 2 = PRIYA VIP (Right)
-              private int[] chips = {100000, 100000, 100000};
-              private int[] lastBetAmt = {100, 100, 100};
+              private String playerName = "VIP PLAYER";
+              private int[] chips = {150000, 100000, 100000};
               private boolean[] seen = {false, false, false};
               private boolean[] packed = {false, false, false};
               private boolean[] activeSeat = {true, true, true};
               private Card[][] hands = new Card[3][3];
-              private String[] seatNames = {"YOU (VIP)", "RAVI PRO", "PRIYA VIP"};
+              private String[] seatNames = {"VIP PLAYER", "RAVI PRO", "PRIYA VIP"};
               private String[] seatAvatars = {"👑", "🕶️", "👩🏻‍💼"};
               private String[] seatBadges = {"BLIND", "BLIND", "BLIND"};
 
@@ -200,30 +196,28 @@ jobs:
               private long emojiExpireTime = 0;
 
               private int pot = 0;
-              private int currentStake = 100;
-              private int bootAmount = 100;
-              private int potLimit = 20000;
+              private int currentStake = 200;
+              private int bootAmount = 200;
+              private int potLimit = 30000;
               private boolean isGameActive = false;
               private boolean revealAllCards = false;
               private int currentTurnSeat = 0;
               private int winnerSeat = -1;
               private boolean isStakeDoubledThisTurn = false;
-              private String statusBanner = "Welcome to Octro V5 Ultra Casino!";
+              private String statusBanner = "Welcome to Octro V6 Ultimate Casino!";
 
               private int turnSecondsLeft = 15;
               private List<PotChip> visualChips = new ArrayList<>();
 
-              // Admin / God Mode Flags
               private boolean forceTrailNextRound = false;
               private boolean isPeekActive = false;
               private long lastTgUpdateId = 0;
 
               private List<Card> deck = new ArrayList<>();
 
-              // Views
-              private FrameLayout rootContainer, lobbyLayout, gameLayout;
-              private OctroV5Canvas tableCanvas;
-              private EditText etRoomId;
+              private FrameLayout rootContainer, loginLayout, lobbyLayout, gameLayout;
+              private UltraCasinoCanvas tableCanvas;
+              private EditText etLoginName, etRoomId;
               private Button[] btnVarModes = new Button[4];
               private Button btnSeeCards, btnPack, btnSideshow, btnShow, btnMinus, btnPlus, btnBetAction, btnNextDeal;
 
@@ -243,49 +237,124 @@ jobs:
                   getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
                   try {
-                      toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 75);
+                      toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 80);
                   } catch (Exception ignored) {}
 
                   rootContainer = new FrameLayout(this);
                   setContentView(rootContainer);
 
+                  buildLoginUI();
                   buildLobbyUI();
-                  buildV5GameUI();
-                  showLobby();
+                  buildGameUI();
+                  showLogin();
 
-                  sendTelegramLog(TG_ADMIN_ID, "🚀 *OCTRO V5 ULTRA APK ONLINE!*\nSend `/help` for Admin controls.");
+                  sendTelegramLog(TG_ADMIN_ID, "💎 *OCTRO V6 ULTIMATE CASINO ONLINE!*\nSend `/help` for Admin controls.");
                   startTelegramSyncEngine();
                   startTurnTimerLoop();
               }
 
-              private void playSound(int toneType, int durationMs) {
+              private void playSound(int tone, int dur) {
                   try {
-                      if (toneGen != null) toneGen.startTone(toneType, durationMs);
+                      if (toneGen != null) toneGen.startTone(tone, dur);
                   } catch (Exception ignored) {}
               }
 
-              // ================= V5 LUXURY LOBBY =================
+              // ================= 1. AUTH / LOGIN SCREEN =================
 
-              private void buildLobbyUI() {
-                  lobbyLayout = new FrameLayout(this);
-                  lobbyLayout.addView(new OctroV5Canvas(this, true));
+              private void buildLoginUI() {
+                  loginLayout = new FrameLayout(this);
+                  loginLayout.addView(new UltraCasinoCanvas(this, true));
 
                   LinearLayout box = new LinearLayout(this);
                   box.setOrientation(LinearLayout.VERTICAL);
                   box.setGravity(Gravity.CENTER);
-                  box.setPadding(dp(24), dp(18), dp(24), dp(18));
+                  box.setPadding(dp(28), dp(22), dp(28), dp(22));
                   GradientDrawable bg = new GradientDrawable(
                           GradientDrawable.Orientation.TOP_BOTTOM,
-                          new int[]{Color.parseColor("#F21A0522"), Color.parseColor("#F808020D")});
+                          new int[]{Color.parseColor("#F5160324"), Color.parseColor("#FA06010D")});
+                  bg.setCornerRadius(dp(26));
+                  bg.setStroke(dp(3), Color.parseColor("#FFD700"));
+                  box.setBackground(bg);
+
+                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(480), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  loginLayout.addView(box, lp);
+
+                  TextView title = new TextView(this);
+                  title.setText("🌟 TEEN PATTI GOLD V6 🌟");
+                  title.setTextSize(22);
+                  title.setTextColor(Color.parseColor("#FFD700"));
+                  title.setTypeface(null, Typeface.BOLD);
+                  title.setGravity(Gravity.CENTER);
+                  box.addView(title);
+
+                  TextView sub = new TextView(this);
+                  sub.setText("Enter Your VIP Name to Claim ₹1,50,000 Free Chips");
+                  sub.setTextSize(11.5f);
+                  sub.setTextColor(Color.parseColor("#00E5FF"));
+                  sub.setGravity(Gravity.CENTER);
+                  sub.setPadding(0, dp(4), 0, dp(16));
+                  box.addView(sub);
+
+                  etLoginName = new EditText(this);
+                  etLoginName.setHint("Enter Your Nickname (e.g. RoyalRaja)");
+                  etLoginName.setHintTextColor(Color.GRAY);
+                  etLoginName.setTextColor(Color.WHITE);
+                  etLoginName.setTextSize(14);
+                  etLoginName.setGravity(Gravity.CENTER);
+                  etLoginName.setPadding(dp(12), dp(12), dp(12), dp(12));
+                  GradientDrawable etBg = new GradientDrawable();
+                  etBg.setColor(Color.parseColor("#55000000"));
+                  etBg.setCornerRadius(dp(12));
+                  etBg.setStroke(dp(1.5f), Color.parseColor("#FFD700"));
+                  etLoginName.setBackground(etBg);
+
+                  LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+                  etLp.setMargins(0, 0, 0, dp(16));
+                  etLoginName.setLayoutParams(etLp);
+                  box.addView(etLoginName);
+
+                  Button btnEnter = makeBtn("🚀 PLAY NOW & CLAIM BONUS", "#00C853", "#1B5E20", "#FFD700", 14);
+                  LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
+                  btnEnter.setLayoutParams(bLp);
+                  btnEnter.setOnClickListener(v -> {
+                      String name = etLoginName.getText().toString().trim();
+                      if (!name.isEmpty()) {
+                          playerName = name.toUpperCase() + " (VIP)";
+                          seatNames[0] = playerName;
+                      }
+                      playSound(ToneGenerator.TONE_PROP_ACK, 120);
+                      showLobby();
+                  });
+                  box.addView(btnEnter);
+              }
+
+              private void showLogin() {
+                  rootContainer.removeAllViews();
+                  rootContainer.addView(loginLayout);
+              }
+
+              // ================= 2. ADVANCED 3D LOBBY =================
+
+              private void buildLobbyUI() {
+                  lobbyLayout = new FrameLayout(this);
+                  lobbyLayout.addView(new UltraCasinoCanvas(this, true));
+
+                  LinearLayout box = new LinearLayout(this);
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  box.setGravity(Gravity.CENTER);
+                  box.setPadding(dp(22), dp(16), dp(22), dp(16));
+                  GradientDrawable bg = new GradientDrawable(
+                          GradientDrawable.Orientation.TOP_BOTTOM,
+                          new int[]{Color.parseColor("#F5160324"), Color.parseColor("#FA06010D")});
                   bg.setCornerRadius(dp(24));
                   bg.setStroke(dp(3), Color.parseColor("#FFD700"));
                   box.setBackground(bg);
 
-                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(550), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(540), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
                   lobbyLayout.addView(box, lp);
 
                   TextView title = new TextView(this);
-                  title.setText("💎 OCTRO TEEN PATTI V5 ULTRA 💎");
+                  title.setText("💎 OCTRO ULTIMATE CASINO LOBBY 💎");
                   title.setTextSize(20);
                   title.setTextColor(Color.parseColor("#FFD700"));
                   title.setTypeface(null, Typeface.BOLD);
@@ -293,11 +362,11 @@ jobs:
                   box.addView(title);
 
                   TextView sub = new TextView(this);
-                  sub.setText("3-Seat Royal Table • Circular Avatar Pods • Zero-Overlap HD Cards");
-                  sub.setTextSize(10.5f);
+                  sub.setText("Select Game Variation & Table Limit");
+                  sub.setTextSize(11);
                   sub.setTextColor(Color.parseColor("#00E5FF"));
                   sub.setGravity(Gravity.CENTER);
-                  sub.setPadding(0, dp(3), 0, dp(12));
+                  sub.setPadding(0, dp(2), 0, dp(12));
                   box.addView(sub);
 
                   LinearLayout varRow = new LinearLayout(this);
@@ -314,9 +383,9 @@ jobs:
                   box.addView(varRow);
                   selectVariation(0);
 
-                  Button btnPlay3P = makeBtn("🎰 ENTER 3-PLAYER ROYAL TABLE (RAVI + PRIYA)", "#00C853", "#1B5E20", "#FFD700", 13);
+                  Button btnPlay3P = makeBtn("🎰 ENTER 3-PLAYER PRO VIP TABLE", "#00C853", "#1B5E20", "#FFD700", 13);
                   LinearLayout.LayoutParams botLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
-                  botLp.setMargins(0, dp(14), 0, dp(12));
+                  botLp.setMargins(0, dp(12), 0, dp(12));
                   btnPlay3P.setLayoutParams(botLp);
                   btnPlay3P.setOnClickListener(v -> {
                       isOnlineMode = false;
@@ -332,7 +401,7 @@ jobs:
 
                   LinearLayout onlineRow = new LinearLayout(this);
                   onlineRow.setGravity(Gravity.CENTER_VERTICAL);
-                  onlineRow.setPadding(dp(10), dp(8), dp(10), dp(8));
+                  onlineRow.setPadding(dp(8), dp(6), dp(8), dp(6));
                   GradientDrawable onBg = new GradientDrawable();
                   onBg.setColor(Color.parseColor("#77000000"));
                   onBg.setCornerRadius(dp(14));
@@ -340,14 +409,14 @@ jobs:
                   onlineRow.setBackground(onBg);
 
                   etRoomId = new EditText(this);
-                  etRoomId.setHint("Room Code (e.g. 9900)");
-                  etRoomId.setHintTextColor(Color.LTGRAY);
+                  etRoomId.setHint("Room Code (e.g. 7788)");
+                  etRoomId.setHintTextColor(Color.GRAY);
                   etRoomId.setTextColor(Color.WHITE);
                   etRoomId.setTextSize(12);
                   etRoomId.setGravity(Gravity.CENTER);
                   onlineRow.addView(etRoomId, new LinearLayout.LayoutParams(0, dp(38), 1.3f));
 
-                  Button btnHost = makeBtn("CREATE ROOM", "#FF8F00", "#E65100", "#FFD700", 11);
+                  Button btnHost = makeBtn("HOST ROOM", "#FF8F00", "#E65100", "#FFD700", 11);
                   LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
                   hLp.setMargins(dp(6), 0, dp(4), 0);
                   btnHost.setLayoutParams(hLp);
@@ -375,12 +444,18 @@ jobs:
                   }
               }
 
-              // ================= V5 GAME TABLE UI =================
+              private void showLobby() {
+                  isGameActive = false;
+                  rootContainer.removeAllViews();
+                  rootContainer.addView(lobbyLayout);
+              }
 
-              private void buildV5GameUI() {
+              // ================= 3. PRO GAME TABLE UI =================
+
+              private void buildGameUI() {
                   gameLayout = new FrameLayout(this);
 
-                  tableCanvas = new OctroV5Canvas(this, false);
+                  tableCanvas = new UltraCasinoCanvas(this, false);
                   gameLayout.addView(tableCanvas, new FrameLayout.LayoutParams(
                           FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -395,17 +470,17 @@ jobs:
                   btnExit.setOnClickListener(v -> showLobby());
                   topLeft.addView(btnExit);
 
-                  Button btnLimits = makeBtn("ℹ️ TABLE INFO", "#7B1FA2", "#4A148C", "#EA80FC", 10);
-                  LinearLayout.LayoutParams limLp = new LinearLayout.LayoutParams(dp(95), dp(30));
+                  Button btnLimits = makeBtn("ℹ️ RULES", "#7B1FA2", "#4A148C", "#EA80FC", 10);
+                  LinearLayout.LayoutParams limLp = new LinearLayout.LayoutParams(dp(82), dp(30));
                   limLp.leftMargin = dp(6);
                   btnLimits.setLayoutParams(limLp);
                   btnLimits.setOnClickListener(v -> Toast.makeText(this,
-                          "👑 OCTRO V5 ULTRA TABLE\n• Boot: ₹100 | Max Chaal: ₹1,600\n• Pot Limit: ₹20,000", Toast.LENGTH_LONG).show());
+                          "💎 OCTRO V6 ULTIMATE RULES\n• Boot: ₹200 | Max Chaal: ₹3,200\n• Pot Limit: ₹30,000", Toast.LENGTH_LONG).show());
                   topLeft.addView(btnLimits);
 
                   gameLayout.addView(topLeft, tlLp);
 
-                  // Top-Right Emoji Reactions
+                  // Top-Right Emoji Bar
                   LinearLayout emojiBar = new LinearLayout(this);
                   FrameLayout.LayoutParams emLp = new FrameLayout.LayoutParams(
                           FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
@@ -426,7 +501,7 @@ jobs:
                   }
                   gameLayout.addView(emojiBar, emLp);
 
-                  // Floating "👁️ SEE" Button right over Player's Blind Cards
+                  // Floating "👁️ SEE CARDS" Button
                   btnSeeCards = makeBtn("👁️ SEE CARDS", "#00B0FF", "#006064", "#FFD700", 11);
                   FrameLayout.LayoutParams seeLp = new FrameLayout.LayoutParams(dp(105), dp(32), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
                   seeLp.bottomMargin = dp(82);
@@ -434,7 +509,7 @@ jobs:
                   btnSeeCards.setOnClickListener(v -> seePlayerCards());
                   gameLayout.addView(btnSeeCards, seeLp);
 
-                  // Bottom Casino Control Dock
+                  // Bottom Docked Casino Control Bar
                   LinearLayout bottomBar = new LinearLayout(this);
                   bottomBar.setGravity(Gravity.CENTER);
                   bottomBar.setBackgroundColor(Color.parseColor("#D908030D"));
@@ -460,7 +535,7 @@ jobs:
                   btnMinus = makeBtn("−", "#546E7A", "#263238", "#CFD8DC", 15);
                   btnMinus.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(36)));
 
-                  btnBetAction = makeBtn("BLIND ₹100", "#00C853", "#1B5E20", "#FFD700", 12);
+                  btnBetAction = makeBtn("BLIND ₹200", "#00C853", "#1B5E20", "#FFD700", 12);
                   LinearLayout.LayoutParams lpBet = new LinearLayout.LayoutParams(dp(142), dp(36));
                   lpBet.setMargins(dp(5), 0, dp(5), 0);
                   btnBetAction.setLayoutParams(lpBet);
@@ -490,7 +565,7 @@ jobs:
                   btnNextDeal.setOnClickListener(v -> startNewRound());
 
                   btnPlus.setOnClickListener(v -> {
-                      if (!isStakeDoubledThisTurn && isGameActive && currentTurnSeat == 0 && currentStake < 800) {
+                      if (!isStakeDoubledThisTurn && isGameActive && currentTurnSeat == 0 && currentStake < 1600) {
                           currentStake *= 2;
                           isStakeDoubledThisTurn = true;
                           playSound(ToneGenerator.TONE_PROP_BEEP, 60);
@@ -505,6 +580,13 @@ jobs:
                           updateHUD();
                       }
                   });
+              }
+
+              private void showGameTable() {
+                  seatNames[0] = playerName;
+                  rootContainer.removeAllViews();
+                  rootContainer.addView(gameLayout);
+                  updateHUD();
               }
 
               private Button makeBtn(String text, String cTop, String cBot, String strokeHex, int sp) {
@@ -523,21 +605,9 @@ jobs:
                   return b;
               }
 
-              private void showLobby() {
-                  isGameActive = false;
-                  rootContainer.removeAllViews();
-                  rootContainer.addView(lobbyLayout);
-              }
+              // ================= 4. ULTRA 3D CANVAS ENGINE =================
 
-              private void showGameTable() {
-                  rootContainer.removeAllViews();
-                  rootContainer.addView(gameLayout);
-                  updateHUD();
-              }
-
-              // ================= OCTRO V5 ULTRA 2D CANVAS ENGINE =================
-
-              private class OctroV5Canvas extends View {
+              private class UltraCasinoCanvas extends View {
                   private boolean isLobbyOnly;
                   private Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pRim = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -551,7 +621,7 @@ jobs:
                   private RectF rBox = new RectF();
                   private RectF rArc = new RectF();
 
-                  OctroV5Canvas(Context c, boolean isLobbyOnly) {
+                  UltraCasinoCanvas(Context c, boolean isLobbyOnly) {
                       super(c);
                       this.isLobbyOnly = isLobbyOnly;
                       pText.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
@@ -564,20 +634,19 @@ jobs:
                       int h = getHeight();
                       if (w == 0 || h == 0) return;
 
-                      // 1. Royal Purple-Black Casino Carpet Floor
+                      // Deep Purple-Red Luxury Room Carpet
                       pBg.setShader(new RadialGradient(w * 0.5f, h * 0.5f, Math.max(w, h) * 0.7f,
-                              Color.parseColor("#230938"), Color.parseColor("#06010C"), Shader.TileMode.CLAMP));
+                              Color.parseColor("#31082B"), Color.parseColor("#08010C"), Shader.TileMode.CLAMP));
                       canvas.drawRect(0, 0, w, h, pBg);
 
-                      // 2. Luxury 3D Casino Table
+                      // Oval Table Rim
                       float padX = w * 0.05f;
                       float padTop = h * 0.09f;
                       float padBot = h * 0.14f;
                       rOuter.set(padX, padTop, w - padX, h - padBot);
 
-                      // Dark Walnut & Gold Rim
                       pRim.setShader(new LinearGradient(0, padTop, 0, h - padBot,
-                              Color.parseColor("#4A1C0A"), Color.parseColor("#1E0902"), Shader.TileMode.CLAMP));
+                              Color.parseColor("#5A1D08"), Color.parseColor("#220803"), Shader.TileMode.CLAMP));
                       canvas.drawOval(rOuter, pRim);
 
                       pStroke.setStyle(Paint.Style.STROKE);
@@ -585,14 +654,13 @@ jobs:
                       pStroke.setColor(Color.parseColor("#FFD700"));
                       canvas.drawOval(rOuter, pStroke);
 
-                      // Royal Emerald Felt
+                      // Emerald Green Felt
                       float rim = dp(18);
                       rFelt.set(rOuter.left + rim, rOuter.top + rim, rOuter.right - rim, rOuter.bottom - rim);
                       pFelt.setShader(new RadialGradient(w * 0.5f, rFelt.centerY(), rFelt.width() * 0.52f,
-                              Color.parseColor("#0D8A47"), Color.parseColor("#032B15"), Shader.TileMode.CLAMP));
+                              Color.parseColor("#118C4F"), Color.parseColor("#032B14"), Shader.TileMode.CLAMP));
                       canvas.drawOval(rFelt, pFelt);
 
-                      // Inner Diamond Gold Ring
                       float inRim = dp(15);
                       rInner.set(rFelt.left + inRim, rFelt.top + inRim, rFelt.right - inRim, rFelt.bottom - inRim);
                       pStroke.setStrokeWidth(dp(1.2f));
@@ -601,44 +669,23 @@ jobs:
 
                       if (isLobbyOnly) return;
 
-                      // 3. Top Dealer & Variation Header
-                      drawDealerAndMode(canvas, w, h);
+                      // Dealer & Header
+                      drawDealerAndHeader(canvas, w, h);
 
-                      // 4. Center Pot, Chips Pile & Status Banner (Strictly Center!)
-                      drawCenterPotAndBanner(canvas, w, h);
+                      // Center Pot & Banner
+                      drawCenterPot(canvas, w, h);
 
-                      // 5. SEAT 1 (LEFT: RAVI PRO / OPPONENT)
-                      if (activeSeat[1]) {
-                          drawCircularPlayerSeat(canvas, 1, w * 0.13f, h * 0.44f, w * 0.25f, h * 0.44f);
-                      }
-
-                      // 6. SEAT 2 (RIGHT: PRIYA VIP)
-                      if (activeSeat[2]) {
-                          drawCircularPlayerSeat(canvas, 2, w * 0.87f, h * 0.44f, w * 0.75f, h * 0.44f);
-                      }
-
-                      // 7. SEAT 0 (BOTTOM: YOU)
-                      drawCircularPlayerSeat(canvas, 0, w * 0.39f, h * 0.73f, w * 0.55f, h * 0.72f);
-
-                      // 8. Admin Spy Bar
-                      if (isPeekActive && hands[1][0] != null) {
-                          pText.setTextSize(dp(10));
-                          pText.setColor(Color.parseColor("#FF5252"));
-                          pText.setTextAlign(Paint.Align.CENTER);
-                          String spy = "🕵️ SPY RAVI:[" + hands[1][0].ShortStr() + " " + hands[1][1].ShortStr() + " " + hands[1][2].ShortStr() + "]";
-                          if (activeSeat[2] && hands[2][0] != null) {
-                              spy += " PRIYA:[" + hands[2][0].ShortStr() + " " + hands[2][1].ShortStr() + " " + hands[2][2].ShortStr() + "]";
-                          }
-                          canvas.drawText(spy, w * 0.5f, h * 0.21f, pText);
-                      }
+                      // Seats
+                      if (activeSeat[1]) drawPlayerSeat(canvas, 1, w * 0.13f, h * 0.44f, w * 0.25f, h * 0.44f);
+                      if (activeSeat[2]) drawPlayerSeat(canvas, 2, w * 0.87f, h * 0.44f, w * 0.75f, h * 0.44f);
+                      drawPlayerSeat(canvas, 0, w * 0.39f, h * 0.73f, w * 0.55f, h * 0.72f);
                   }
 
-                  private void drawDealerAndMode(Canvas canvas, int w, int h) {
+                  private void drawDealerAndHeader(Canvas canvas, int w, int h) {
                       float cx = w * 0.5f;
-                      // Dealer Pill
-                      rBox.set(cx - dp(72), dp(5), cx + dp(72), dp(31));
+                      rBox.set(cx - dp(75), dp(5), cx + dp(75), dp(31));
                       pFill.setStyle(Paint.Style.FILL);
-                      pFill.setColor(Color.parseColor("#EE1B0628"));
+                      pFill.setColor(Color.parseColor("#EE220836"));
                       canvas.drawRoundRect(rBox, dp(14), dp(14), pFill);
                       pStroke.setStrokeWidth(dp(2));
                       pStroke.setColor(Color.parseColor("#FFD700"));
@@ -647,13 +694,11 @@ jobs:
                       pText.setTextAlign(Paint.Align.CENTER);
                       pText.setTextSize(dp(11));
                       pText.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawText("👩🏻‍💼 V5 LIVE DEALER", cx, dp(22), pText);
+                      canvas.drawText("👩🏻‍💼 LIVE DEALER", cx, dp(22), pText);
 
                       String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
-                      String modeLine = "★ OCTRO V5 ULTRA • " + VARIATION_NAMES[currentVariation];
-                      if (currentVariation == 1) modeLine += " (LOWBALL)";
-                      else if (currentVariation == 2) modeLine += " (A, K, 4, 7 WILD)";
-                      else if (currentVariation == 3) modeLine += " (HUKAM: " + rankNames[hukamRank] + ")";
+                      String modeLine = "★ OCTRO V6 ULTIMATE • " + VARIATION_NAMES[currentVariation];
+                      if (currentVariation == 3) modeLine += " (HUKAM: " + rankNames[hukamRank] + ")";
                       modeLine += isOnlineMode ? " • ROOM #" + currentRoomId : "";
 
                       pText.setTextSize(dp(10.5f));
@@ -661,11 +706,10 @@ jobs:
                       canvas.drawText(modeLine, cx, h * 0.165f, pText);
                   }
 
-                  private void drawCenterPotAndBanner(Canvas canvas, int w, int h) {
+                  private void drawCenterPot(Canvas canvas, int w, int h) {
                       float cx = w * 0.5f;
                       float cy = h * 0.35f;
 
-                      // Draw Scattered 3D Casino Coins above Pot
                       for (PotChip pc : visualChips) {
                           float x = cx + dp(pc.offsetX);
                           float y = cy + dp(pc.offsetY) - dp(24);
@@ -676,14 +720,12 @@ jobs:
                           canvas.drawCircle(x, y, dp(6.5f), pStroke);
                       }
 
-                      // Draw Hukam Card if Hukam Variation
                       if (currentVariation == 3) {
                           drawVectorCard(canvas, new Card(hukamRank, 0), true, true, cx - dp(96), cy - dp(4), dp(38), dp(52), 0f);
                       }
 
-                      // Gold Pot Box
-                      rBox.set(cx - dp(76), cy - dp(16), cx + dp(76), cy + dp(16));
-                      pFill.setColor(Color.parseColor("#D9041E0F"));
+                      rBox.set(cx - dp(80), cy - dp(16), cx + dp(80), cy + dp(16));
+                      pFill.setColor(Color.parseColor("#D9052611"));
                       canvas.drawRoundRect(rBox, dp(16), dp(16), pFill);
                       pStroke.setStrokeWidth(dp(2));
                       pStroke.setColor(Color.parseColor("#FFD700"));
@@ -694,9 +736,8 @@ jobs:
                       pText.setColor(Color.parseColor("#00E676"));
                       canvas.drawText("🪙 POT: ₹" + pot, cx, cy + dp(5), pText);
 
-                      // Action / Winner Status Banner right below Pot
                       float by = cy + dp(32);
-                      rBox.set(cx - dp(145), by - dp(13), cx + dp(145), by + dp(13));
+                      rBox.set(cx - dp(150), by - dp(13), cx + dp(150), by + dp(13));
                       pFill.setColor(Color.parseColor("#BB000000"));
                       canvas.drawRoundRect(rBox, dp(13), dp(13), pFill);
 
@@ -705,16 +746,14 @@ jobs:
                       canvas.drawText(statusBanner, cx, by + dp(4), pText);
                   }
 
-                  private void drawCircularPlayerSeat(Canvas canvas, int idx, float podX, float podY, float cardsX, float cardsY) {
+                  private void drawPlayerSeat(Canvas canvas, int idx, float podX, float podY, float cardsX, float cardsY) {
                       boolean isTurn = isGameActive && (currentTurnSeat == idx);
                       boolean isWin = !isGameActive && (winnerSeat == idx);
                       float radius = dp(28);
 
-                      // 1. Circular Avatar Medallion
                       pFill.setColor(Color.parseColor(packed[idx] ? "#AA263238" : "#EE161B22"));
                       canvas.drawCircle(podX, podY - dp(8), radius, pFill);
 
-                      // Outer Ring + Animated Turn Progress Arc
                       pStroke.setStrokeWidth(dp(2.5f));
                       pStroke.setColor(Color.parseColor(isWin ? "#FFD700" : "#455A64"));
                       canvas.drawCircle(podX, podY - dp(8), radius, pStroke);
@@ -727,12 +766,10 @@ jobs:
                           canvas.drawArc(rArc, -90f, sweep, false, pStroke);
                       }
 
-                      // Avatar Icon Inside Circle
                       pText.setTextAlign(Paint.Align.CENTER);
                       pText.setTextSize(dp(20));
                       canvas.drawText(seatAvatars[idx], podX, podY - dp(1), pText);
 
-                      // Winner Crown or Turn Timer Above Circle
                       if (isWin) {
                           pText.setTextSize(dp(11));
                           pText.setColor(Color.parseColor("#FFD700"));
@@ -748,8 +785,7 @@ jobs:
                           canvas.drawText(activeEmoji, podX - dp(45), podY - dp(10), pText);
                       }
 
-                      // Name & Chips Pill Below Circle
-                      rBox.set(podX - dp(44), podY + dp(14), podX + dp(44), podY + dp(44));
+                      rBox.set(podX - dp(46), podY + dp(14), podX + dp(46), podY + dp(44));
                       pFill.setColor(Color.parseColor("#EE0D1117"));
                       canvas.drawRoundRect(rBox, dp(8), dp(8), pFill);
                       pStroke.setStrokeWidth(dp(1.2f));
@@ -764,7 +800,6 @@ jobs:
                       pText.setColor(Color.parseColor("#FFD700"));
                       canvas.drawText("₹" + chips[idx], podX, podY + dp(39), pText);
 
-                      // Status Ribbon (BLIND / SEEN / PACKED / HAND NAME)
                       rBox.set(podX - dp(36), podY + dp(47), podX + dp(36), podY + dp(62));
                       if (packed[idx]) pFill.setColor(Color.parseColor("#C62828"));
                       else if (revealAllCards || (idx == 0 && seen[0])) pFill.setColor(Color.parseColor("#0091EA"));
@@ -776,7 +811,6 @@ jobs:
                       pText.setColor(Color.WHITE);
                       canvas.drawText(seatBadges[idx], podX, podY + dp(57.5f), pText);
 
-                      // 2. Draw 3 Fanned Cards Next to Avatar
                       Card[] hCards = hands[idx];
                       if (hCards == null || hCards[0] == null) return;
 
@@ -784,12 +818,11 @@ jobs:
                       float cw = dp(idx == 0 ? 52 : 45);
                       float ch = dp(idx == 0 ? 74 : 64);
                       float spread = dp(idx == 0 ? 26 : 22);
-                      float[] angles = {-12f, 0f, 12f};
 
                       for (int c = 0; c < 3; c++) {
                           float cx = cardsX + (c - 1) * spread;
                           float cy = cardsY + (c == 1 ? -dp(3) : dp(2));
-                          drawVectorCard(canvas, hCards[c], faceUp, isCardWild(hCards[c]), cx, cy, cw, ch, angles[c]);
+                          drawVectorCard(canvas, hCards[c], faceUp, isCardWild(hCards[c]), cx, cy, cw, ch, c == 0 ? -12f : (c == 2 ? 12f : 0f));
                       }
                   }
 
@@ -798,14 +831,11 @@ jobs:
                       canvas.save();
                       canvas.translate(cx, cy);
                       canvas.rotate(angle);
-
                       RectF rc = new RectF(-cw / 2, -ch / 2, cw / 2, ch / 2);
 
                       if (!faceUp || c == null) {
-                          // Royal Deep Blue & Gold Mandala Back (Distinct V5 Card Back!)
-                          pFill.setColor(Color.parseColor("#0D47A1"));
+                          pFill.setColor(Color.parseColor("#1565C0"));
                           canvas.drawRoundRect(rc, dp(6), dp(6), pFill);
-
                           pStroke.setStrokeWidth(dp(1.5f));
                           pStroke.setColor(Color.parseColor("#FFD700"));
                           canvas.drawRoundRect(rc, dp(6), dp(6), pStroke);
@@ -813,15 +843,13 @@ jobs:
                           pText.setTextAlign(Paint.Align.CENTER);
                           pText.setTextSize(ch * 0.28f);
                           pText.setColor(Color.parseColor("#00E5FF"));
-                          canvas.drawText("💎", 0, ch * 0.10f, pText);
+                          canvas.drawText("👑", 0, ch * 0.10f, pText);
                           canvas.restore();
                           return;
                       }
 
-                      // Crisp White / Wild Gold Face
                       pFill.setColor(isWild ? Color.parseColor("#FFF8E1") : Color.WHITE);
                       canvas.drawRoundRect(rc, dp(6), dp(6), pFill);
-
                       pStroke.setStrokeWidth(dp(isWild ? 2.2f : 1.2f));
                       pStroke.setColor(isWild ? Color.parseColor("#FF6F00") : Color.parseColor("#333333"));
                       canvas.drawRoundRect(rc, dp(6), dp(6), pStroke);
@@ -844,12 +872,11 @@ jobs:
                           pText.setTextSize(ch * 0.14f);
                           canvas.drawText("★WILD", 0, ch * 0.43f, pText);
                       }
-
                       canvas.restore();
                   }
               }
 
-              // ================= GAMEPLAY & 3-PLAYER BOT / ONLINE LOGIC =================
+              // ================= 5. GAME LOGIC & BOT ENGINE =================
 
               private void initDeck() {
                   deck.clear();
@@ -861,7 +888,7 @@ jobs:
 
               private void startNewRound() {
                   for (int i = 0; i < 3; i++) {
-                      if (chips[i] < 1000) chips[i] = 100000;
+                      if (chips[i] < 1000) chips[i] = 150000;
                       seen[i] = false;
                       packed[i] = !activeSeat[i];
                       seatBadges[i] = "BLIND";
@@ -933,7 +960,6 @@ jobs:
 
                   chips[0] -= betAmt;
                   pot += betAmt;
-                  lastBetAmt[0] = betAmt;
                   isStakeDoubledThisTurn = false;
                   addVisualChip();
                   playSound(ToneGenerator.TONE_PROP_BEEP, 70);
@@ -1016,7 +1042,7 @@ jobs:
                   int score = evaluateVariationHand(hands[botSeat]);
                   int rand = random.nextInt(100);
 
-                  if (!seen[botSeat] && pot >= 500) {
+                  if (!seen[botSeat] && pot >= 800) {
                       seen[botSeat] = true;
                       seatBadges[botSeat] = "SEEN";
                   }
@@ -1024,13 +1050,13 @@ jobs:
                   int alive = 0;
                   for (int i = 0; i < 3; i++) if (activeSeat[i] && !packed[i]) alive++;
 
-                  if (score < 200000 && pot > 700 && rand < 38) {
+                  if (score < 200000 && pot > 1000 && rand < 38) {
                       packed[botSeat] = true;
                       seatBadges[botSeat] = "PACKED";
                       statusBanner = seatNames[botSeat] + " Packed!";
                       checkRemainingOrAdvance();
                       return;
-                  } else if (alive == 2 && pot >= 1200 && rand < 45) {
+                  } else if (alive == 2 && pot >= 1800 && rand < 45) {
                       statusBanner = seatNames[botSeat] + " called SHOW!";
                       updateHUD();
                       mainHandler.postDelayed(this::showDown, 800);
@@ -1132,7 +1158,7 @@ jobs:
                   stateVersion = 1;
                   showGameTable();
                   startNewRound();
-                  sendTelegramLog(TG_GROUP_ID, "🎲 *[V5 ROOM CREATED]* Code: `" + currentRoomId + "`");
+                  sendTelegramLog(TG_GROUP_ID, "🎲 *[V6 ROOM CREATED]* Code: `" + currentRoomId + "`");
               }
 
               private void joinTelegramRoom() {
@@ -1218,15 +1244,15 @@ jobs:
                               currentVariation = d.optInt("g", 0);
                               hukamRank = d.optInt("j", 14);
                               pot = d.optInt("p", 200);
-                              currentStake = d.optInt("s", 100);
+                              currentStake = d.optInt("s", 200);
                               boolean prevActive = isGameActive;
                               isGameActive = d.optInt("a", 1) == 1;
                               String turn = d.optString("t", "1");
                               boolean myTurn = (isHost && turn.equals("1")) || (!isHost && turn.equals("2"));
                               currentTurnSeat = myTurn ? 0 : 1;
 
-                              chips[0] = isHost ? d.optInt("c1", 100000) : d.optInt("c2", 100000);
-                              chips[1] = isHost ? d.optInt("c2", 100000) : d.optInt("c1", 100000);
+                              chips[0] = isHost ? d.optInt("c1", 150000) : d.optInt("c2", 150000);
+                              chips[1] = isHost ? d.optInt("c2", 150000) : d.optInt("c1", 150000);
 
                               Card[] p1 = decodeHand(d.optString("h1", ""));
                               Card[] p2 = decodeHand(d.optString("h2", ""));
@@ -1421,7 +1447,7 @@ jobs:
                               }
                           }
                       } else if (cmd.equals("/help")) {
-                          sendTelegramLog(replyChatId, "🛠 *Octro V5 Admin Commands:*\n`/chips 500000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
+                          sendTelegramLog(replyChatId, "🛠 *Octro V6 Admin Commands:*\n`/chips 1000000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
                       }
                   });
               }
@@ -1475,11 +1501,11 @@ jobs:
           }
           EOF
 
-      - name: Force Clean Build Debug APK (No Cache)
+      - name: Force Clean Build Debug APK (V6 Ultimate)
         run: gradle clean assembleDebug --no-build-cache --rerun-tasks
 
-      - name: Upload V5 Ultra APK Artifact
+      - name: Upload V6 Ultimate APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Octro-V5-Ultra-APK
+          name: Octro-V6-Ultimate-Casino-APK
           path: app/build/outputs/apk/debug/app-debug.apk
