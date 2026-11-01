@@ -1,4 +1,4 @@
-name: Build Octro V7 3D Neon RayTraced APK
+name: Build Octro V8 Royal 3D Casino APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-v7:
+  build-v8:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,10 +25,10 @@ jobs:
           gradle-version: '8.5'
           cache-disabled: true
 
-      - name: Generate V7 3D Neon RayTraced Project
+      - name: Generate V8 Royal 3D Casino Project
         run: |
           rm -rf app build .gradle settings.gradle build.gradle gradle.properties
-          mkdir -p app/src/main/java/com/teenpatti/neonv7
+          mkdir -p app/src/main/java/com/teenpatti/royalv8
 
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
@@ -47,7 +47,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "OctroV7Neon3D"
+          rootProject.name = "OctroV8Royal3D"
           include ':app'
           EOF
 
@@ -70,15 +70,15 @@ jobs:
           }
 
           android {
-              namespace 'com.teenpatti.neonv7'
+              namespace 'com.teenpatti.royalv8'
               compileSdk 34
 
               defaultConfig {
-                  applicationId "com.teenpatti.neonv7"
+                  applicationId "com.teenpatti.royalv8"
                   minSdk 23
                   targetSdk 34
-                  versionCode 70
-                  versionName "7.0-3DNeonEdition"
+                  versionCode 80
+                  versionName "8.0-Royal3D"
               }
 
               buildTypes {
@@ -105,7 +105,7 @@ jobs:
               <application
                   android:allowBackup="false"
                   android:hardwareAccelerated="true"
-                  android:label="Octro V7 3D Gold"
+                  android:label="Teen Patti Royal V8"
                   android:usesCleartextTraffic="true"
                   android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
                   <activity
@@ -121,16 +121,15 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > app/src/main/java/com/teenpatti/neonv7/MainActivity.java
-          package com.teenpatti.neonv7;
+          cat << 'EOF' > app/src/main/java/com/teenpatti/royalv8/MainActivity.java
+          package com.teenpatti.royalv8;
 
           import android.animation.ValueAnimator;
           import android.app.Activity;
           import android.content.Context;
-          import android.graphics.Bitmap;
-          import android.graphics.BlurMaskFilter;
           import android.graphics.Canvas;
           import android.graphics.Color;
+          import android.graphics.DashPathEffect;
           import android.graphics.LinearGradient;
           import android.graphics.Paint;
           import android.graphics.Path;
@@ -150,7 +149,7 @@ jobs:
           import android.view.Window;
           import android.view.WindowManager;
           import android.view.animation.DecelerateInterpolator;
-          import android.widget.Button;
+          import android.view.animation.OvershootInterpolator;
           import android.widget.EditText;
           import android.widget.FrameLayout;
           import android.widget.LinearLayout;
@@ -181,7 +180,7 @@ jobs:
               private static final String TG_GROUP_ID = "-1004359719082";
 
               private static final String[] VARIATION_NAMES = {"CLASSIC", "MUFLIS", "AK47", "HUKAM"};
-              private int currentVariation = 2; // Default AK47 like reference image!
+              private int currentVariation = 0;
               private int hukamRank = 14;
 
               private boolean isOnlineMode = false;
@@ -189,13 +188,14 @@ jobs:
               private String currentRoomId = "";
               private int stateVersion = 0;
 
-              private String playerName = "U (VIP)";
-              private int[] chips = {148800, 103000, 98200};
+              private String playerName = "YOU (VIP)";
+              private int[] chips = {150000, 100000, 100000};
+              private int[] lastSeatBet = {0, 0, 0};
               private boolean[] seen = {false, false, false};
               private boolean[] packed = {false, false, false};
               private boolean[] activeSeat = {true, true, true};
               private Card[][] hands = new Card[3][3];
-              private String[] seatNames = {"U (VIP)", "RAVI PRO", "PRIYA VIP"};
+              private String[] seatNames = {"YOU (VIP)", "RAVI PRO", "PRIYA VIP"};
               private String[] seatBadges = {"BLIND", "BLIND", "BLIND"};
 
               private String activeEmoji = "";
@@ -212,12 +212,18 @@ jobs:
               private boolean isStakeDoubledThisTurn = false;
               private String statusBanner = "Boot ₹200 Collected! Play Blind or Chaal!";
 
-              // 60FPS Animation Variables
+              // Live Chip & Card Animations (Exact Amount Display!)
               private float dealAnimProgress = 1f;
               private float glowPulse = 0f;
               private float flyingChipProgress = 1f;
               private int flyingChipFromSeat = 0;
+              private int flyingChipAmount = 200;
+              private boolean flyingPotToWinner = false;
+              private float potWinAnimProgress = 1f;
               private int turnSecondsLeft = 15;
+
+              // Dynamic Table Pot Chips (Each stores actual ₹100, ₹200, ₹400, ₹800 value!)
+              private List<ChipToken> tablePotChips = new ArrayList<>();
 
               // Admin / God Mode Flags
               private boolean forceTrailNextRound = false;
@@ -227,12 +233,11 @@ jobs:
               private List<Card> deck = new ArrayList<>();
 
               private FrameLayout rootContainer, loginLayout, lobbyLayout, gameLayout;
-              private RayTracedCasinoView tableCanvas;
+              private LuxuryCasinoSurface tableCanvas;
               private EditText etLoginName, etRoomId;
-              private Glossy3DButton[] btnVarModes = new Glossy3DButton[4];
-              private Glossy3DButton btnSeeCards, btnPack, btnSideshow, btnShow, btnMinus, btnPlus, btnBetAction, btnNextDeal;
+              private RoyalButton[] btnVarModes = new RoyalButton[4];
+              private RoyalButton btnSeeCards, btnPack, btnSideshow, btnShow, btnMinus, btnPlus, btnBetAction, btnNextDeal;
 
-              private Bitmap feltNoiseBitmap;
               private ToneGenerator toneGen;
               private Handler mainHandler = new Handler(Looper.getMainLooper());
               private ExecutorService networkExecutor = Executors.newCachedThreadPool();
@@ -256,8 +261,6 @@ jobs:
                       toneGen = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
                   } catch (Exception ignored) {}
 
-                  generateProceduralFeltTexture();
-
                   rootContainer = new FrameLayout(this);
                   setContentView(rootContainer);
 
@@ -266,9 +269,8 @@ jobs:
                   buildGameUI();
                   showLogin();
 
-                  // Continuous 30FPS Neon Pulse Animation
                   ValueAnimator pulseAnim = ValueAnimator.ofFloat(0f, 1f);
-                  pulseAnim.setDuration(1600);
+                  pulseAnim.setDuration(1500);
                   pulseAnim.setRepeatCount(ValueAnimator.INFINITE);
                   pulseAnim.setRepeatMode(ValueAnimator.REVERSE);
                   pulseAnim.addUpdateListener(a -> {
@@ -279,21 +281,9 @@ jobs:
                   });
                   pulseAnim.start();
 
-                  sendTelegramLog(TG_ADMIN_ID, "👑 *OCTRO V7 3D NEON EDITION ONLINE!*\nSend `/help` for Admin controls.");
+                  sendTelegramLog(TG_ADMIN_ID, "🎰 *OCTRO V8 ROYAL 3D EDITION ONLINE!*\nReal ₹200/₹400 Chip Animation Active. Send `/help` for Admin panel.");
                   startTelegramSyncEngine();
                   startTurnTimerLoop();
-              }
-
-              private void generateProceduralFeltTexture() {
-                  int size = 120;
-                  feltNoiseBitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-                  int[] pixels = new int[size * size];
-                  Random r = new Random(777);
-                  for (int i = 0; i < pixels.length; i++) {
-                      int shade = r.nextInt(18);
-                      pixels[i] = Color.argb(28, shade, 110 + shade, 45 + shade);
-                  }
-                  feltNoiseBitmap.setPixels(pixels, 0, size, 0, 0, size, size);
               }
 
               private void playSound(int tone, int dur) {
@@ -302,25 +292,23 @@ jobs:
                   } catch (Exception ignored) {}
               }
 
-              // ================= CUSTOM 3D GLOSSY GLASS BUTTON =================
+              // ================= CUSTOM 3D ROYAL METALLIC BUTTON =================
 
-              private class Glossy3DButton extends View {
+              private class RoyalButton extends View {
                   private String label;
-                  private int iconType; // 0=none, 1=pack_cards, 2=eye, 3=spade, 4=play, 5=back, 6=info
-                  private int cTop, cMid, cBot, cStroke;
+                  private int iconType;
+                  private int cTop, cBot, cStroke;
                   private float textSp;
                   private boolean isEnabledState = true;
-                  private boolean isPressedState = false;
                   private Paint pFill = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pGloss = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
-                  private Paint pGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pIcon = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private RectF rBtn = new RectF();
                   private RectF rGloss = new RectF();
 
-                  Glossy3DButton(Context ctx, String text, int iconType, String topHex, String botHex, String strokeHex, float sp) {
+                  RoyalButton(Context ctx, String text, int iconType, String topHex, String botHex, String strokeHex, float sp) {
                       super(ctx);
                       this.label = text;
                       this.iconType = iconType;
@@ -349,7 +337,7 @@ jobs:
                   public void setEnabled(boolean enabled) {
                       super.setEnabled(enabled);
                       this.isEnabledState = enabled;
-                      setAlpha(enabled ? 1.0f : 0.55f);
+                      setAlpha(enabled ? 1.0f : 0.48f);
                       invalidate();
                   }
 
@@ -357,15 +345,11 @@ jobs:
                   public boolean onTouchEvent(MotionEvent event) {
                       if (!isEnabledState) return false;
                       if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                          isPressedState = true;
-                          setScaleX(0.95f);
-                          setScaleY(0.95f);
-                          invalidate();
+                          setScaleX(0.94f);
+                          setScaleY(0.94f);
                       } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                          isPressedState = false;
                           setScaleX(1.0f);
                           setScaleY(1.0f);
-                          invalidate();
                       }
                       return super.onTouchEvent(event);
                   }
@@ -377,37 +361,34 @@ jobs:
                       int h = getHeight();
                       if (w <= 0 || h <= 0) return;
 
-                      float pad = dp(3);
+                      float pad = dp(2.5f);
                       rBtn.set(pad, pad, w - pad, h - pad);
-                      float rad = h * 0.46f;
+                      float rad = dp(12);
 
-                      // 1. Rich 3D Vertical Bevel Gradient
-                      pFill.setShader(new LinearGradient(0, rBtn.top, 0, rBtn.bottom,
-                              cTop, cBot, Shader.TileMode.CLAMP));
+                      // Drop Shadow
+                      pFill.setColor(Color.parseColor("#88000000"));
+                      canvas.drawRoundRect(new RectF(rBtn.left, rBtn.top + dp(2), rBtn.right, rBtn.bottom + dp(2)), rad, rad, pFill);
+
+                      // 3D Main Gradient
+                      pFill.setShader(new LinearGradient(0, rBtn.top, 0, rBtn.bottom, cTop, cBot, Shader.TileMode.CLAMP));
                       canvas.drawRoundRect(rBtn, rad, rad, pFill);
+                      pFill.setShader(null);
 
-                      // 2. Top Half Glass Reflection Shine (Exactly like 2nd Pic!)
-                      rGloss.set(rBtn.left + dp(3), rBtn.top + dp(2), rBtn.right - dp(3), rBtn.top + rBtn.height() * 0.48f);
+                      // Top Glass Shine
+                      rGloss.set(rBtn.left + dp(2), rBtn.top + dp(1.5f), rBtn.right - dp(2), rBtn.top + rBtn.height() * 0.45f);
                       pGloss.setShader(new LinearGradient(0, rGloss.top, 0, rGloss.bottom,
-                              Color.argb(120, 255, 255, 255), Color.argb(10, 255, 255, 255), Shader.TileMode.CLAMP));
+                              Color.argb(110, 255, 255, 255), Color.argb(0, 255, 255, 255), Shader.TileMode.CLAMP));
                       canvas.drawRoundRect(rGloss, rad * 0.8f, rad * 0.8f, pGloss);
 
-                      // 3. Outer Metallic / Neon Rim
+                      // Metallic Gold / Colored Rim
                       pStroke.setStyle(Paint.Style.STROKE);
-                      pStroke.setStrokeWidth(dp(2.2f));
+                      pStroke.setStrokeWidth(dp(2f));
                       pStroke.setColor(cStroke);
                       canvas.drawRoundRect(rBtn, rad, rad, pStroke);
 
-                      // Inner thin highlight ring
-                      RectF rIn = new RectF(rBtn.left + dp(2), rBtn.top + dp(2), rBtn.right - dp(2), rBtn.bottom - dp(2));
-                      pStroke.setStrokeWidth(dp(0.8f));
-                      pStroke.setColor(Color.argb(90, 255, 255, 255));
-                      canvas.drawRoundRect(rIn, rad, rad, pStroke);
-
-                      // 4. Vector Icon + Crisp Shadowed Text
                       pText.setTextSize(dp(textSp));
                       pText.setColor(Color.WHITE);
-                      pText.setShadowLayer(dp(3), 0, dp(1.5f), Color.parseColor("#AA000000"));
+                      pText.setShadowLayer(dp(2.5f), 0, dp(1.5f), Color.BLACK);
 
                       float centerY = h * 0.5f + dp(textSp * 0.34f);
 
@@ -417,54 +398,48 @@ jobs:
                       } else {
                           pText.setTextAlign(Paint.Align.LEFT);
                           float textW = pText.measureText(label);
-                          float iconW = dp(18);
-                          float totalW = iconW + dp(6) + textW;
+                          float iconW = dp(16);
+                          float totalW = iconW + dp(5) + textW;
                           float startX = (w - totalW) * 0.5f;
-
-                          drawButtonIcon(canvas, iconType, startX + iconW * 0.5f, h * 0.5f, dp(7.5f));
-                          canvas.drawText(label, startX + iconW + dp(6), centerY, pText);
+                          drawIcon(canvas, iconType, startX + iconW * 0.5f, h * 0.5f, dp(7));
+                          canvas.drawText(label, startX + iconW + dp(5), centerY, pText);
                       }
                   }
 
-                  private void drawButtonIcon(Canvas canvas, int type, float cx, float cy, float r) {
+                  private void drawIcon(Canvas canvas, int type, float cx, float cy, float r) {
                       pIcon.setStyle(Paint.Style.FILL);
                       pIcon.setColor(Color.WHITE);
-                      if (type == 1) { // Pack Folded Cards Icon
+                      if (type == 1) { // Folded Cards
                           canvas.save();
                           canvas.translate(cx, cy);
-                          canvas.rotate(-12f);
-                          canvas.drawRoundRect(new RectF(-r * 0.8f, -r, r * 0.4f, r * 0.9f), dp(2), dp(2), pIcon);
-                          canvas.rotate(22f);
+                          canvas.rotate(-10f);
+                          canvas.drawRoundRect(new RectF(-r * 0.7f, -r, r * 0.4f, r * 0.85f), dp(2), dp(2), pIcon);
+                          canvas.rotate(20f);
                           pIcon.setColor(Color.parseColor("#FFCDD2"));
-                          canvas.drawRoundRect(new RectF(-r * 0.4f, -r, r * 0.8f, r * 0.9f), dp(2), dp(2), pIcon);
+                          canvas.drawRoundRect(new RectF(-r * 0.4f, -r, r * 0.7f, r * 0.85f), dp(2), dp(2), pIcon);
                           canvas.restore();
-                      } else if (type == 2) { // Sideshow Eye Icon
+                      } else if (type == 2) { // Eye
                           pIcon.setStyle(Paint.Style.STROKE);
-                          pIcon.setStrokeWidth(dp(2));
-                          RectF eyeR = new RectF(cx - r * 1.2f, cy - r * 0.7f, cx + r * 1.2f, cy + r * 0.7f);
-                          canvas.drawOval(eyeR, pIcon);
+                          pIcon.setStrokeWidth(dp(1.8f));
+                          canvas.drawOval(new RectF(cx - r * 1.15f, cy - r * 0.65f, cx + r * 1.15f, cy + r * 0.65f), pIcon);
                           pIcon.setStyle(Paint.Style.FILL);
-                          canvas.drawCircle(cx, cy, r * 0.4f, pIcon);
-                      } else if (type == 3) { // Show Spade Icon
+                          canvas.drawCircle(cx, cy, r * 0.38f, pIcon);
+                      } else if (type == 3) { // Spade
                           pText.setTextAlign(Paint.Align.CENTER);
-                          canvas.drawText("♠", cx, cy + dp(5), pText);
-                      } else if (type == 4) { // Next Hand Play Triangle
+                          canvas.drawText("♠", cx, cy + dp(4.5f), pText);
+                      } else if (type == 4) { // Play Triangle
                           Path path = new Path();
-                          path.moveTo(cx - r * 0.6f, cy - r * 0.85f);
-                          path.lineTo(cx + r * 0.9f, cy);
-                          path.lineTo(cx - r * 0.6f, cy + r * 0.85f);
+                          path.moveTo(cx - r * 0.5f, cy - r * 0.8f);
+                          path.lineTo(cx + r * 0.85f, cy);
+                          path.lineTo(cx - r * 0.5f, cy + r * 0.8f);
                           path.close();
                           canvas.drawPath(path, pIcon);
-                      } else if (type == 5) { // Left Arrow
+                      } else if (type == 5) { // Back
                           pText.setTextAlign(Paint.Align.CENTER);
-                          canvas.drawText("←", cx, cy + dp(5), pText);
-                      } else if (type == 6) { // Info Circle
-                          canvas.drawCircle(cx, cy, r * 0.95f, pIcon);
-                          pIcon.setColor(Color.parseColor("#6A1B9A"));
-                          pIcon.setTextAlign(Paint.Align.CENTER);
-                          pIcon.setTextSize(dp(10));
-                          pIcon.setTypeface(Typeface.DEFAULT_BOLD);
-                          canvas.drawText("i", cx, cy + dp(3.5f), pIcon);
+                          canvas.drawText("⬅", cx, cy + dp(4.5f), pText);
+                      } else if (type == 6) { // Info
+                          pText.setTextAlign(Paint.Align.CENTER);
+                          canvas.drawText("ⓘ", cx, cy + dp(4.5f), pText);
                       }
                   }
               }
@@ -473,7 +448,7 @@ jobs:
 
               private void buildLoginUI() {
                   loginLayout = new FrameLayout(this);
-                  loginLayout.addView(new RayTracedCasinoView(this, true));
+                  loginLayout.addView(new LuxuryCasinoSurface(this, true));
 
                   LinearLayout box = new LinearLayout(this);
                   box.setOrientation(LinearLayout.VERTICAL);
@@ -481,16 +456,16 @@ jobs:
                   box.setPadding(dpi(28), dpi(22), dpi(28), dpi(22));
                   android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
                           android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                          new int[]{Color.parseColor("#EE160626"), Color.parseColor("#F807020F")});
-                  bg.setCornerRadius(dp(26));
+                          new int[]{Color.parseColor("#F21C0D06"), Color.parseColor("#FA080301")});
+                  bg.setCornerRadius(dp(24));
                   bg.setStroke(dpi(3), Color.parseColor("#FFD700"));
                   box.setBackground(bg);
 
-                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dpi(480), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dpi(470), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
                   loginLayout.addView(box, lp);
 
                   TextView title = new TextView(this);
-                  title.setText("👑 OCTRO TEEN PATTI 3D GOLD 👑");
+                  title.setText("👑 TEEN PATTI ROYAL 3D V8 👑");
                   title.setTextSize(21);
                   title.setTextColor(Color.parseColor("#FFD700"));
                   title.setTypeface(null, Typeface.BOLD);
@@ -498,34 +473,34 @@ jobs:
                   box.addView(title);
 
                   TextView sub = new TextView(this);
-                  sub.setText("3D Neon Ray-Traced Casino • Claim ₹1,50,000 Free VIP Chips");
+                  sub.setText("Real ₹200 / ₹400 Animated Casino Chips • ₹1,50,000 Free Bonus");
                   sub.setTextSize(11.5f);
-                  sub.setTextColor(Color.parseColor("#00E5FF"));
+                  sub.setTextColor(Color.parseColor("#FFE082"));
                   sub.setGravity(Gravity.CENTER);
                   sub.setPadding(0, dpi(4), 0, dpi(16));
                   box.addView(sub);
 
                   etLoginName = new EditText(this);
-                  etLoginName.setHint("Enter Your VIP Name (Default: U)");
-                  etLoginName.setHintTextColor(Color.LTGRAY);
+                  etLoginName.setHint("Enter Your VIP Name (e.g. BOSS)");
+                  etLoginName.setHintTextColor(Color.GRAY);
                   etLoginName.setTextColor(Color.WHITE);
                   etLoginName.setTextSize(14);
                   etLoginName.setGravity(Gravity.CENTER);
                   android.graphics.drawable.GradientDrawable etBg = new android.graphics.drawable.GradientDrawable();
-                  etBg.setColor(Color.parseColor("#88000000"));
-                  etBg.setCornerRadius(dp(14));
-                  etBg.setStroke(dpi(2), Color.parseColor("#FFD700"));
+                  etBg.setColor(Color.parseColor("#99000000"));
+                  etBg.setCornerRadius(dp(12));
+                  etBg.setStroke(dpi(1.5f), Color.parseColor("#FFD700"));
                   etLoginName.setBackground(etBg);
 
                   LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpi(46));
                   etLp.setMargins(0, 0, 0, dpi(16));
                   box.addView(etLoginName, etLp);
 
-                  Glossy3DButton btnEnter = new Glossy3DButton(this, "ENTER 3D CASINO LOBBY", 4, "#43A047", "#1B5E20", "#FFD700", 13.5f);
-                  LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpi(48));
+                  RoyalButton btnEnter = new RoyalButton(this, "CLAIM ₹1,50,000 & ENTER LOBBY", 4, "#2E7D32", "#1B5E20", "#FFD700", 13f);
+                  LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpi(46));
                   btnEnter.setOnClickListener(v -> {
                       String name = etLoginName.getText().toString().trim();
-                      playerName = name.isEmpty() ? "U (VIP)" : (name.toUpperCase() + " (VIP)");
+                      playerName = name.isEmpty() ? "YOU (VIP)" : (name.toUpperCase() + " (VIP)");
                       seatNames[0] = playerName;
                       playSound(ToneGenerator.TONE_PROP_ACK, 120);
                       showLobby();
@@ -538,11 +513,11 @@ jobs:
                   rootContainer.addView(loginLayout);
               }
 
-              // ================= 2. 3D NEON LOBBY =================
+              // ================= 2. ROYAL CASINO LOBBY =================
 
               private void buildLobbyUI() {
                   lobbyLayout = new FrameLayout(this);
-                  lobbyLayout.addView(new RayTracedCasinoView(this, true));
+                  lobbyLayout.addView(new LuxuryCasinoSurface(this, true));
 
                   LinearLayout box = new LinearLayout(this);
                   box.setOrientation(LinearLayout.VERTICAL);
@@ -550,26 +525,26 @@ jobs:
                   box.setPadding(dpi(24), dpi(18), dpi(24), dpi(18));
                   android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
                           android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                          new int[]{Color.parseColor("#EE160626"), Color.parseColor("#F807020F")});
-                  bg.setCornerRadius(dp(26));
+                          new int[]{Color.parseColor("#F21C0D06"), Color.parseColor("#FA080301")});
+                  bg.setCornerRadius(dp(24));
                   bg.setStroke(dpi(3), Color.parseColor("#FFD700"));
                   box.setBackground(bg);
 
-                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dpi(550), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dpi(540), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
                   lobbyLayout.addView(box, lp);
 
                   TextView title = new TextView(this);
-                  title.setText("💎 OCTRO V7 3D NEON CASINO 💎");
-                  title.setTextSize(20);
+                  title.setText("🎰 OCTRO V8 ROYAL CASINO LOBBY 🎰");
+                  title.setTextSize(19.5f);
                   title.setTextColor(Color.parseColor("#FFD700"));
                   title.setTypeface(null, Typeface.BOLD);
                   title.setGravity(Gravity.CENTER);
                   box.addView(title);
 
                   TextView sub = new TextView(this);
-                  sub.setText("Select Game Mode • 3D Chip Stacks • Gold Wreath Avatars");
+                  sub.setText("Select Variation • Live ₹200 / ₹400 Chip Throw • Telegram Multiplayer");
                   sub.setTextSize(11);
-                  sub.setTextColor(Color.parseColor("#80D8FF"));
+                  sub.setTextColor(Color.parseColor("#FFE082"));
                   sub.setGravity(Gravity.CENTER);
                   sub.setPadding(0, dpi(2), 0, dpi(12));
                   box.addView(sub);
@@ -578,16 +553,16 @@ jobs:
                   varRow.setGravity(Gravity.CENTER);
                   for (int i = 0; i < 4; i++) {
                       final int idx = i;
-                      btnVarModes[i] = new Glossy3DButton(this, VARIATION_NAMES[i], 0, "#37474F", "#1C262B", "#90A4AE", 11f);
+                      btnVarModes[i] = new RoyalButton(this, VARIATION_NAMES[i], 0, "#37474F", "#1C262B", "#90A4AE", 11f);
                       LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(0, dpi(38), 1f);
                       vlp.setMargins(dpi(4), 0, dpi(4), 0);
                       btnVarModes[i].setOnClickListener(v -> selectVariation(idx));
                       varRow.addView(btnVarModes[i], vlp);
                   }
                   box.addView(varRow);
-                  selectVariation(2); // Default AK47 selected
+                  selectVariation(0);
 
-                  Glossy3DButton btnPlay3P = new Glossy3DButton(this, "PLAY 3-PLAYER VIP TABLE (RAVI + PRIYA)", 4, "#43A047", "#1B5E20", "#FFD700", 13f);
+                  RoyalButton btnPlay3P = new RoyalButton(this, "PLAY 3-PLAYER ROYAL TABLE (VS RAVI & PRIYA)", 4, "#2E7D32", "#1B5E20", "#FFD700", 12.5f);
                   LinearLayout.LayoutParams botLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpi(46));
                   botLp.setMargins(0, dpi(14), 0, dpi(12));
                   btnPlay3P.setOnClickListener(v -> {
@@ -607,8 +582,8 @@ jobs:
                   onlineRow.setPadding(dpi(8), dpi(6), dpi(8), dpi(6));
                   android.graphics.drawable.GradientDrawable onBg = new android.graphics.drawable.GradientDrawable();
                   onBg.setColor(Color.parseColor("#88000000"));
-                  onBg.setCornerRadius(dp(16));
-                  onBg.setStroke(dpi(1.5f), Color.parseColor("#00E5FF"));
+                  onBg.setCornerRadius(dp(14));
+                  onBg.setStroke(dpi(1.5f), Color.parseColor("#FFB300"));
                   onlineRow.setBackground(onBg);
 
                   etRoomId = new EditText(this);
@@ -619,13 +594,13 @@ jobs:
                   etRoomId.setGravity(Gravity.CENTER);
                   onlineRow.addView(etRoomId, new LinearLayout.LayoutParams(0, dpi(40), 1.3f));
 
-                  Glossy3DButton btnHost = new Glossy3DButton(this, "HOST ROOM", 0, "#FFA000", "#E65100", "#FFD700", 11f);
+                  RoyalButton btnHost = new RoyalButton(this, "CREATE TABLE", 0, "#EF6C00", "#E65100", "#FFD700", 11f);
                   LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(0, dpi(40), 1f);
                   hLp.setMargins(dpi(6), 0, dpi(4), 0);
                   btnHost.setOnClickListener(v -> createTelegramRoom());
                   onlineRow.addView(btnHost, hLp);
 
-                  Glossy3DButton btnJoin = new Glossy3DButton(this, "JOIN ROOM", 0, "#00B0FF", "#01579B", "#80D8FF", 11f);
+                  RoyalButton btnJoin = new RoyalButton(this, "JOIN TABLE", 0, "#0288D1", "#01579B", "#80D8FF", 11f);
                   btnJoin.setOnClickListener(v -> joinTelegramRoom());
                   onlineRow.addView(btnJoin, new LinearLayout.LayoutParams(0, dpi(40), 1f));
 
@@ -636,7 +611,7 @@ jobs:
                   currentVariation = idx;
                   for (int i = 0; i < 4; i++) {
                       if (i == idx) {
-                          btnVarModes[i].setColors("#EC407A", "#880E4F", "#FFD700");
+                          btnVarModes[i].setColors("#C62828", "#7F0000", "#FFD700");
                       } else {
                           btnVarModes[i].setColors("#37474F", "#1C262B", "#78909C");
                       }
@@ -649,44 +624,44 @@ jobs:
                   rootContainer.addView(lobbyLayout);
               }
 
-              // ================= 3. GAME TABLE HUD (MATCHING 2ND PIC) =================
+              // ================= 3. GAME TABLE HUD =================
 
               private void buildGameUI() {
                   gameLayout = new FrameLayout(this);
 
-                  tableCanvas = new RayTracedCasinoView(this, false);
+                  tableCanvas = new LuxuryCasinoSurface(this, false);
                   gameLayout.addView(tableCanvas, new FrameLayout.LayoutParams(
                           FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-                  // Top-Left: LOBBY & RULES 3D Pills (Exact match to 2nd Pic)
+                  // Top-Left: LOBBY & TABLE INFO
                   LinearLayout topLeft = new LinearLayout(this);
                   FrameLayout.LayoutParams tlLp = new FrameLayout.LayoutParams(
                           FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
                   tlLp.setMargins(dpi(14), dpi(8), 0, 0);
 
-                  Glossy3DButton btnExit = new Glossy3DButton(this, "LOBBY", 5, "#263238", "#0D1117", "#FFD700", 11f);
+                  RoyalButton btnExit = new RoyalButton(this, "LOBBY", 5, "#263238", "#0D1117", "#FFD700", 10.5f);
                   btnExit.setOnClickListener(v -> showLobby());
-                  topLeft.addView(btnExit, new LinearLayout.LayoutParams(dpi(92), dpi(36)));
+                  topLeft.addView(btnExit, new LinearLayout.LayoutParams(dpi(88), dpi(34)));
 
-                  Glossy3DButton btnRules = new Glossy3DButton(this, "RULES", 6, "#AB47BC", "#4A148C", "#EA80FC", 11f);
-                  LinearLayout.LayoutParams rlLp = new LinearLayout.LayoutParams(dpi(92), dpi(36));
+                  RoyalButton btnRules = new RoyalButton(this, "LIMITS", 6, "#5D4037", "#3E2723", "#FFD700", 10.5f);
+                  LinearLayout.LayoutParams rlLp = new LinearLayout.LayoutParams(dpi(88), dpi(34));
                   rlLp.leftMargin = dpi(8);
                   btnRules.setOnClickListener(v -> Toast.makeText(this,
-                          "👑 OCTRO V7 3D RULES\n• Boot: ₹200 | Max Chaal: ₹3,200\n• Pot Limit: ₹50,000", Toast.LENGTH_LONG).show());
+                          "👑 ROYAL TABLE LIMITS\n• Boot: ₹200 | Chaal: ₹200 - ₹3,200\n• Pot Limit: ₹50,000", Toast.LENGTH_LONG).show());
                   topLeft.addView(btnRules, rlLp);
 
                   gameLayout.addView(topLeft, tlLp);
 
-                  // Top-Right: 4 Gold Medallion Emoji Buttons (😂 🔥 💸 👑)
+                  // Top-Right: Emoji Bar
                   LinearLayout emojiBar = new LinearLayout(this);
                   FrameLayout.LayoutParams emLp = new FrameLayout.LayoutParams(
                           FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
                   emLp.setMargins(0, dpi(8), dpi(14), 0);
                   String[] emojis = {"😂", "🔥", "💸", "👑"};
                   for (String em : emojis) {
-                      Glossy3DButton bEm = new Glossy3DButton(this, em, 0, "#2C1810", "#0D0705", "#FFD700", 14f);
-                      LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(dpi(40), dpi(38));
-                      elp.leftMargin = dpi(6);
+                      RoyalButton bEm = new RoyalButton(this, em, 0, "#3E2723", "#1B0F0D", "#FFD700", 13f);
+                      LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(dpi(38), dpi(34));
+                      elp.leftMargin = dpi(5);
                       bEm.setOnClickListener(v -> {
                           activeEmoji = em;
                           emojiExpireTime = System.currentTimeMillis() + 3000;
@@ -697,45 +672,46 @@ jobs:
                   }
                   gameLayout.addView(emojiBar, emLp);
 
-                  // Floating "👁 SEE CARDS" Button over Player's Blind Cards
-                  btnSeeCards = new Glossy3DButton(this, "SEE CARDS", 2, "#00B0FF", "#01579B", "#FFD700", 10.5f);
-                  FrameLayout.LayoutParams seeLp = new FrameLayout.LayoutParams(dpi(110), dpi(34), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-                  seeLp.bottomMargin = dpi(86);
-                  seeLp.leftMargin = dpi(62);
+                  // Floating "👁 SEE CARDS" Button directly over Player's Blind Cards
+                  btnSeeCards = new RoyalButton(this, "SEE CARDS", 2, "#0288D1", "#01579B", "#FFD700", 10.5f);
+                  FrameLayout.LayoutParams seeLp = new FrameLayout.LayoutParams(dpi(108), dpi(32), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+                  seeLp.bottomMargin = dpi(82);
+                  seeLp.leftMargin = dpi(66);
                   btnSeeCards.setOnClickListener(v -> seePlayerCards());
                   gameLayout.addView(btnSeeCards, seeLp);
 
-                  // Bottom 3D Glossy Action Bar (Exact Match to 2nd Pic: PACK | SIDESHOW | SHOW | - | CHAAL | + | NEXT HAND)
+                  // Bottom Docked Luxury Control Panel
                   LinearLayout bottomBar = new LinearLayout(this);
                   bottomBar.setGravity(Gravity.CENTER);
-                  bottomBar.setPadding(dpi(8), dpi(2), dpi(8), dpi(4));
+                  bottomBar.setBackgroundColor(Color.parseColor("#DD0C0502"));
+                  bottomBar.setPadding(dpi(8), dpi(3), dpi(8), dpi(4));
                   FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
-                          FrameLayout.LayoutParams.MATCH_PARENT, dpi(52), Gravity.BOTTOM);
+                          FrameLayout.LayoutParams.MATCH_PARENT, dpi(50), Gravity.BOTTOM);
 
-                  btnPack = new Glossy3DButton(this, "PACK", 1, "#FF5252", "#B71C1C", "#FFD700", 12f);
-                  LinearLayout.LayoutParams lpPack = new LinearLayout.LayoutParams(dpi(105), dpi(42));
+                  btnPack = new RoyalButton(this, "PACK", 1, "#D32F2F", "#8E0000", "#FFD700", 11.5f);
+                  LinearLayout.LayoutParams lpPack = new LinearLayout.LayoutParams(dpi(100), dpi(40));
                   lpPack.rightMargin = dpi(8);
 
-                  btnSideshow = new Glossy3DButton(this, "SIDESHOW", 2, "#29B6F6", "#01579B", "#80D8FF", 11.5f);
-                  LinearLayout.LayoutParams lpSide = new LinearLayout.LayoutParams(dpi(115), dpi(42));
+                  btnSideshow = new RoyalButton(this, "SIDESHOW", 2, "#0288D1", "#01579B", "#80D8FF", 11f);
+                  LinearLayout.LayoutParams lpSide = new LinearLayout.LayoutParams(dpi(110), dpi(40));
                   lpSide.rightMargin = dpi(8);
 
-                  btnShow = new Glossy3DButton(this, "SHOW", 3, "#FFCA28", "#E65100", "#FFD700", 12f);
-                  LinearLayout.LayoutParams lpShow = new LinearLayout.LayoutParams(dpi(105), dpi(42));
+                  btnShow = new RoyalButton(this, "SHOW", 3, "#F57C00", "#E65100", "#FFD700", 11.5f);
+                  LinearLayout.LayoutParams lpShow = new LinearLayout.LayoutParams(dpi(100), dpi(40));
                   lpShow.rightMargin = dpi(10);
 
-                  btnMinus = new Glossy3DButton(this, "−", 0, "#455A64", "#1C262B", "#90A4AE", 17f);
-                  LinearLayout.LayoutParams lpMin = new LinearLayout.LayoutParams(dpi(42), dpi(42));
+                  btnMinus = new RoyalButton(this, "−", 0, "#455A64", "#1C262B", "#CFD8DC", 16f);
+                  LinearLayout.LayoutParams lpMin = new LinearLayout.LayoutParams(dpi(40), dpi(40));
 
-                  btnBetAction = new Glossy3DButton(this, "CHAAL ₹400", 0, "#66BB6A", "#1B5E20", "#FFD700", 13.5f);
-                  LinearLayout.LayoutParams lpBet = new LinearLayout.LayoutParams(dpi(155), dpi(42));
+                  btnBetAction = new RoyalButton(this, "BLIND ₹200", 0, "#2E7D32", "#1B5E20", "#FFD700", 13f);
+                  LinearLayout.LayoutParams lpBet = new LinearLayout.LayoutParams(dpi(152), dpi(40));
                   lpBet.setMargins(dpi(6), 0, dpi(6), 0);
 
-                  btnPlus = new Glossy3DButton(this, "+", 0, "#455A64", "#1C262B", "#90A4AE", 17f);
-                  LinearLayout.LayoutParams lpPls = new LinearLayout.LayoutParams(dpi(42), dpi(42));
+                  btnPlus = new RoyalButton(this, "+", 0, "#455A64", "#1C262B", "#CFD8DC", 16f);
+                  LinearLayout.LayoutParams lpPls = new LinearLayout.LayoutParams(dpi(40), dpi(40));
 
-                  btnNextDeal = new Glossy3DButton(this, "NEXT HAND", 4, "#AB47BC", "#4A148C", "#FFD700", 12f);
-                  LinearLayout.LayoutParams lpNext = new LinearLayout.LayoutParams(dpi(130), dpi(42));
+                  btnNextDeal = new RoyalButton(this, "NEXT HAND", 4, "#7B1FA2", "#4A148C", "#FFD700", 11.5f);
+                  LinearLayout.LayoutParams lpNext = new LinearLayout.LayoutParams(dpi(124), dpi(40));
                   lpNext.leftMargin = dpi(10);
 
                   bottomBar.addView(btnPack, lpPack);
@@ -779,15 +755,15 @@ jobs:
                   updateHUD();
               }
 
-              // ================= 4. 3D NEON RAY-TRACED CASINO ENGINE (REPLICA OF 2ND PIC) =================
+              // ================= 4. LUXURY 3D CASINO RENDERER (NO '8' CHIPS! REAL ₹200/₹400 CHIPS!) =================
 
-              private class RayTracedCasinoView extends View {
+              private class LuxuryCasinoSurface extends View {
                   private boolean isLobbyBg;
                   private Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
-                  private Paint pNeon = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pRim = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pFelt = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pDash = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pFill = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
                   private RectF rOuter = new RectF();
@@ -796,11 +772,13 @@ jobs:
                   private RectF rBox = new RectF();
                   private RectF rArc = new RectF();
 
-                  RayTracedCasinoView(Context c, boolean isLobbyBg) {
+                  LuxuryCasinoSurface(Context c, boolean isLobbyBg) {
                       super(c);
                       this.isLobbyBg = isLobbyBg;
                       pText.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
                       pText.setFakeBoldText(true);
+                      pDash.setStyle(Paint.Style.STROKE);
+                      pDash.setPathEffect(new DashPathEffect(new float[]{dp(4), dp(3)}, 0));
                   }
 
                   @Override
@@ -810,41 +788,56 @@ jobs:
                       int h = getHeight();
                       if (w <= 0 || h <= 0) return;
 
-                      // 1. 3D Casino VIP Room Background (Pillars, Neon Tubes & Glowing Spade/Heart Holograms)
-                      draw3DCasinoRoomBackdrop(canvas, w, h);
+                      // 1. Luxury Royal Monte-Carlo Velvet & Gold Room Floor
+                      drawLuxuryMonteCarloBackdrop(canvas, w, h);
 
-                      // 2. 3D Metallic Gold & Neon Purple Casino Table
-                      draw3DRayTracedTable(canvas, w, h);
+                      // 2. 3D Leather Cushion, Gold Inlay & Emerald Felt Table
+                      draw3DRoyalCasinoTable(canvas, w, h);
 
                       if (isLobbyBg) return;
 
-                      // 3. Top Crown Live Dealer & Glowing Mode Banner
-                      drawTopDealerAndNeonHeader(canvas, w, h);
+                      // 3. Top Dealer Trajectory & Mode Info
+                      drawDealerAndTableHeader(canvas, w, h);
 
-                      // 4. Center 3D Chip Stacks, Glowing Pot Pill & Trophy Banner
-                      drawCenter3DChipStacksAndPot(canvas, w, h);
+                      // 4. Center Pot Box & Real-Denomination Casino Chips Pile (₹100, ₹200, ₹400, ₹800)
+                      drawCenterPotAndRealChips(canvas, w, h);
 
-                      // 5. Animated Flying Chip (When someone bets)
+                      // 5. SEAT 1 (LEFT: RAVI PRO)
+                      if (activeSeat[1]) {
+                          drawVIPPlayerPodAndCards(canvas, 1, w * 0.14f, h * 0.46f, w * 0.275f, h * 0.44f);
+                      }
+
+                      // 6. SEAT 2 (RIGHT: PRIYA VIP)
+                      if (activeSeat[2]) {
+                          drawVIPPlayerPodAndCards(canvas, 2, w * 0.86f, h * 0.46f, w * 0.725f, h * 0.44f);
+                      }
+
+                      // 7. SEAT 0 (BOTTOM: YOU VIP)
+                      drawVIPPlayerPodAndCards(canvas, 0, w * 0.40f, h * 0.71f, w * 0.555f, h * 0.69f);
+
+                      // 8. LIVE FLYING CHIP ANIMATION WITH EXACT BET VALUE (₹200 / ₹400 / ₹800)!
                       if (flyingChipProgress < 1f) {
                           float[] sx = {w * 0.40f, w * 0.14f, w * 0.86f};
-                          float[] sy = {h * 0.72f, h * 0.45f, h * 0.45f};
-                          float fx = sx[flyingChipFromSeat] + (w * 0.5f - sx[flyingChipFromSeat]) * flyingChipProgress;
-                          float fy = sy[flyingChipFromSeat] + (h * 0.30f - sy[flyingChipFromSeat]) * flyingChipProgress;
-                          drawSingle3DChip(canvas, fx, fy, dp(13), "#FF1744");
-                      }
+                          float[] sy = {h * 0.70f, h * 0.46f, h * 0.46f};
+                          float targetX = w * 0.50f;
+                          float targetY = h * 0.31f;
 
-                      // 6. SEAT 1 (LEFT: RAVI PRO with Gold Laurel Wreath & Cards)
-                      if (activeSeat[1]) {
-                          drawWreathPlayerSeat(canvas, 1, w * 0.14f, h * 0.46f, w * 0.27f, h * 0.43f);
-                      }
+                          float curX = sx[flyingChipFromSeat] + (targetX - sx[flyingChipFromSeat]) * flyingChipProgress;
+                          // Parabolic arc trajectory so chip jumps up and lands into pot!
+                          float arcLift = (float) Math.sin(flyingChipProgress * Math.PI) * dp(45);
+                          float curY = sy[flyingChipFromSeat] + (targetY - sy[flyingChipFromSeat]) * flyingChipProgress - arcLift;
 
-                      // 7. SEAT 2 (RIGHT: PRIYA VIP with Gold Laurel Wreath & Cards)
-                      if (activeSeat[2]) {
-                          drawWreathPlayerSeat(canvas, 2, w * 0.86f, h * 0.46f, w * 0.73f, h * 0.43f);
-                      }
+                          // Draw large clear animated casino chip with ₹200 / ₹400 written on it
+                          drawAuthenticCasinoChip(canvas, curX, curY, dp(20), flyingChipAmount, true);
 
-                      // 8. SEAT 0 (BOTTOM: U VIP with Gold Crown, Wreath & Cards)
-                      drawWreathPlayerSeat(canvas, 0, w * 0.41f, h * 0.72f, w * 0.56f, h * 0.69f);
+                          // Floating "+₹200" or "+₹400" text banner above the moving chip
+                          pText.setTextAlign(Paint.Align.CENTER);
+                          pText.setTextSize(dp(14));
+                          pText.setColor(Color.parseColor("#00E676"));
+                          pText.setShadowLayer(dp(4), 0, dp(2), Color.BLACK);
+                          canvas.drawText("+₹" + flyingChipAmount, curX, curY - dp(24), pText);
+                          pText.setShadowLayer(0, 0, 0, 0);
+                      }
 
                       // 9. Admin Spy Overlay
                       if (isPeekActive && hands[1][0] != null) {
@@ -855,315 +848,308 @@ jobs:
                           if (activeSeat[2] && hands[2][0] != null) {
                               spy += " PRIYA:[" + hands[2][0].ShortStr() + " " + hands[2][1].ShortStr() + " " + hands[2][2].ShortStr() + "]";
                           }
-                          canvas.drawText(spy, w * 0.5f, h * 0.22f, pText);
+                          canvas.drawText(spy, w * 0.5f, h * 0.21f, pText);
                       }
                   }
 
-                  private void draw3DCasinoRoomBackdrop(Canvas canvas, int w, int h) {
-                      // Deep Dark Cyber-Casino Room Gradient
-                      pBg.setShader(new LinearGradient(0, 0, 0, h,
-                              Color.parseColor("#0B0314"), Color.parseColor("#040108"), Shader.TileMode.CLAMP));
+                  private void drawLuxuryMonteCarloBackdrop(Canvas canvas, int w, int h) {
+                      // Deep Warm Mahogany & Obsidian Radial Floor
+                      pBg.setShader(new RadialGradient(w * 0.5f, h * 0.45f, Math.max(w, h) * 0.72f,
+                              Color.parseColor("#2B1108"), Color.parseColor("#070302"), Shader.TileMode.CLAMP));
                       canvas.drawRect(0, 0, w, h, pBg);
 
-                      // Left & Right Golden Architectural Columns
-                      pFill.setShader(new LinearGradient(0, 0, w * 0.08f, 0,
-                              Color.parseColor("#3E2208"), Color.parseColor("#0D0602"), Shader.TileMode.MIRROR));
-                      canvas.drawRect(w * 0.01f, 0, w * 0.05f, h * 0.45f, pFill);
-                      canvas.drawRect(w * 0.95f, 0, w * 0.99f, h * 0.45f, pFill);
-                      pFill.setShader(null);
-
-                      // Glowing Pink Spade (Left Wall) & Heart (Right Wall) Neon Signs (Exact match to 2nd Pic!)
-                      pText.setTextAlign(Paint.Align.CENTER);
-                      pText.setTextSize(dp(36));
-                      pText.setColor(Color.argb(110 + (int)(glowPulse * 70), 255, 64, 180));
-                      pText.setShadowLayer(dp(14), 0, 0, Color.parseColor("#FF00A0"));
-                      canvas.drawText("♠", w * 0.145f, h * 0.20f, pText);
-                      canvas.drawText("♥", w * 0.855f, h * 0.20f, pText);
-                      pText.setShadowLayer(0, 0, 0, 0);
-
-                      // Horizontal Purple Laser Neon Strips Across Wall
+                      // Subtle Golden Carpet Diamond Lattice Lines
                       pStroke.setStyle(Paint.Style.STROKE);
-                      pStroke.setStrokeWidth(dp(2.5f));
-                      pStroke.setColor(Color.parseColor("#D500F9"));
-                      pStroke.setShadowLayer(dp(10), 0, 0, Color.parseColor("#AA00FF"));
-                      canvas.drawLine(0, h * 0.27f, w * 0.30f, h * 0.30f, pStroke);
-                      canvas.drawLine(w * 0.70f, h * 0.30f, w, h * 0.27f, pStroke);
-                      canvas.drawRect(w * 0.30f, h * 0.115f, w * 0.70f, h * 0.19f, pStroke);
-                      pStroke.setShadowLayer(0, 0, 0, 0);
+                      pStroke.setStrokeWidth(dp(0.8f));
+                      pStroke.setColor(Color.parseColor("#18FFD700"));
+                      int step = dpi(70);
+                      for (int x = -h; x < w + h; x += step) {
+                          canvas.drawLine(x, 0, x + h, h, pStroke);
+                          canvas.drawLine(x, h, x + h, 0, pStroke);
+                      }
+
+                      // Top Overhead Warm Golden Casino Spotlight Cone
+                      pFill.setShader(new RadialGradient(w * 0.5f, 0, w * 0.55f,
+                              Color.argb(65, 255, 215, 100), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP));
+                      canvas.drawRect(0, 0, w, h, pFill);
+                      pFill.setShader(null);
                   }
 
-                  private void draw3DRayTracedTable(Canvas canvas, int w, int h) {
-                      float padX = w * 0.025f;
-                      float padTop = h * 0.16f;
-                      float padBot = h * 0.12f;
+                  private void draw3DRoyalCasinoTable(Canvas canvas, int w, int h) {
+                      float padX = w * 0.035f;
+                      float padTop = h * 0.14f;
+                      float padBot = h * 0.13f;
 
-                      // 1. Under-Table Purple/Gold Pedestal Shadow & Glow
-                      RectF rBase = new RectF(padX + dp(10), padTop + dp(18), w - padX - dp(10), h - padBot + dp(14));
-                      pFill.setColor(Color.parseColor("#180624"));
-                      canvas.drawOval(rBase, pFill);
-                      pStroke.setStrokeWidth(dp(3));
-                      pStroke.setColor(Color.parseColor("#9C27B0"));
-                      canvas.drawOval(rBase, pStroke);
+                      // 1. Heavy 3D Floor Drop Shadow under Table
+                      RectF rShadow = new RectF(padX + dp(6), padTop + dp(16), w - padX - dp(6), h - padBot + dp(16));
+                      pFill.setColor(Color.parseColor("#AA000000"));
+                      canvas.drawOval(rShadow, pFill);
 
-                      // 2. Outer 3D Dark Bronze/Leather Bumper
+                      // 2. Outer Padded Dark Espresso Leather Armrest Cushion
                       rOuter.set(padX, padTop, w - padX, h - padBot);
                       pRim.setShader(new LinearGradient(0, padTop, 0, h - padBot,
-                              Color.parseColor("#3B2210"), Color.parseColor("#120904"), Shader.TileMode.CLAMP));
+                              new int[]{Color.parseColor("#4E2614"), Color.parseColor("#240E05"), Color.parseColor("#3E1D0E"), Color.parseColor("#140702")},
+                              null, Shader.TileMode.CLAMP));
                       canvas.drawOval(rOuter, pRim);
 
-                      // 3. Electric Purple Neon Tube Embedded in Rim (Exact match to 2nd Pic!)
-                      RectF rNeon = new RectF(rOuter.left + dp(6), rOuter.top + dp(6), rOuter.right - dp(6), rOuter.bottom - dp(6));
-                      pStroke.setStrokeWidth(dp(3.5f));
-                      pStroke.setColor(Color.parseColor("#E040FB"));
-                      pStroke.setShadowLayer(dp(12), 0, 0, Color.parseColor("#D500F9"));
-                      canvas.drawOval(rNeon, pStroke);
-                      pStroke.setShadowLayer(0, 0, 0, 0);
+                      // Outer Gold Bezel Trim
+                      pStroke.setStrokeWidth(dp(2.5f));
+                      pStroke.setColor(Color.parseColor("#D4AF37"));
+                      canvas.drawOval(rOuter, pStroke);
 
-                      // 4. Thick 3D Metallic Gold Bevel Rail
-                      float goldInset = dp(14);
-                      rGoldRim.set(rOuter.left + goldInset, rOuter.top + goldInset, rOuter.right - goldInset, rOuter.bottom - goldInset);
-                      pRim.setShader(new LinearGradient(w * 0.2f, rGoldRim.top, w * 0.8f, rGoldRim.bottom,
-                              new int[]{Color.parseColor("#FFF59D"), Color.parseColor("#FFB300"), Color.parseColor("#795548"), Color.parseColor("#FFD54F"), Color.parseColor("#FF8F00")},
+                      // 3. Brushed 3D Gold Metallic Inner Railing
+                      float railInset = dp(18);
+                      rGoldRim.set(rOuter.left + railInset, rOuter.top + railInset, rOuter.right - railInset, rOuter.bottom - railInset);
+                      pRim.setShader(new LinearGradient(w * 0.15f, rGoldRim.top, w * 0.85f, rGoldRim.bottom,
+                              new int[]{Color.parseColor("#FFE082"), Color.parseColor("#FFA000"), Color.parseColor("#FFF8E1"), Color.parseColor("#FF8F00")},
                               null, Shader.TileMode.CLAMP));
                       canvas.drawOval(rGoldRim, pRim);
 
-                      // 5. Lush 3D Emerald Velvet Felt with Procedural Grain Texture
-                      float feltInset = dp(14);
+                      // 4. Deep Casino Emerald Felt with Overhead Spotlight Gradient
+                      float feltInset = dp(8);
                       rFelt.set(rGoldRim.left + feltInset, rGoldRim.top + feltInset, rGoldRim.right - feltInset, rGoldRim.bottom - feltInset);
-                      pFelt.setShader(new RadialGradient(w * 0.5f, rFelt.centerY(), rFelt.width() * 0.52f,
-                              Color.parseColor("#17A558"), Color.parseColor("#043819"), Shader.TileMode.CLAMP));
+                      pFelt.setShader(new RadialGradient(w * 0.5f, rFelt.centerY() - dp(15), rFelt.width() * 0.52f,
+                              new int[]{Color.parseColor("#1B8A4E"), Color.parseColor("#0A5C30"), Color.parseColor("#042E16")},
+                              new float[]{0f, 0.68f, 1f}, Shader.TileMode.CLAMP));
                       canvas.drawOval(rFelt, pFelt);
 
-                      // Inner Golden Felt Ring
-                      RectF rInLine = new RectF(rFelt.left + dp(8), rFelt.top + dp(8), rFelt.right - dp(8), rFelt.bottom - dp(8));
-                      pStroke.setStrokeWidth(dp(1.5f));
-                      pStroke.setColor(Color.parseColor("#88FFD700"));
-                      canvas.drawOval(rInLine, pStroke);
+                      // Inner Shadow along Felt Edge for 3D Depth
+                      pStroke.setStrokeWidth(dp(4));
+                      pStroke.setColor(Color.parseColor("#55000000"));
+                      canvas.drawOval(rFelt, pStroke);
 
-                      // Specular Gold Flares on Rim (Bottom Left, Bottom Right, Top Left, Top Right)
-                      drawGoldSparkle(canvas, rGoldRim.left + rGoldRim.width() * 0.16f, rGoldRim.bottom - dp(18));
-                      drawGoldSparkle(canvas, rGoldRim.right - rGoldRim.width() * 0.18f, rGoldRim.bottom - dp(18));
-                      drawGoldSparkle(canvas, rGoldRim.left + rGoldRim.width() * 0.28f, rGoldRim.top + dp(6));
-                      drawGoldSparkle(canvas, rGoldRim.right - rGoldRim.width() * 0.28f, rGoldRim.top + dp(6));
+                      // Inner Double Gold Betting Line with Corner Diamond Pips
+                      RectF rBetLine = new RectF(rFelt.left + dp(14), rFelt.top + dp(14), rFelt.right - dp(14), rFelt.bottom - dp(14));
+                      pStroke.setStrokeWidth(dp(1.2f));
+                      pStroke.setColor(Color.parseColor("#77FFD700"));
+                      canvas.drawOval(rBetLine, pStroke);
+
+                      // Subtle Watermark Suit Symbols on Felt Center
+                      pText.setTextAlign(Paint.Align.CENTER);
+                      pText.setTextSize(dp(22));
+                      pText.setColor(Color.parseColor("#16FFFFFF"));
+                      canvas.drawText("♠   ♥   ♣   ♦", w * 0.5f, rFelt.centerY() + dp(52), pText);
                   }
 
-                  private void drawGoldSparkle(Canvas canvas, float x, float y) {
-                      float r = dp(18 + glowPulse * 8);
-                      pFill.setShader(new RadialGradient(x, y, r,
-                              Color.argb(230, 255, 255, 210), Color.argb(0, 255, 215, 0), Shader.TileMode.CLAMP));
-                      canvas.drawCircle(x, y, r, pFill);
-                      pFill.setShader(null);
-                  }
-
-                  private void drawTopDealerAndNeonHeader(Canvas canvas, int w, int h) {
+                  private void drawDealerAndTableHeader(Canvas canvas, int w, int h) {
                       float cx = w * 0.5f;
 
-                      // 3D Gold Crown sitting on top of LIVE DEALER Pill
-                      pText.setTextAlign(Paint.Align.CENTER);
-                      pText.setTextSize(dp(15));
-                      pText.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawText("👑", cx, dp(14), pText);
-
-                      // LIVE DEALER Dark Gold Pill
-                      rBox.set(cx - dp(105), dp(12), cx + dp(105), dp(46));
+                      // Luxury Dealer Tray at Top Center
+                      rBox.set(cx - dp(95), dp(6), cx + dp(95), dp(36));
                       pFill.setShader(new LinearGradient(0, rBox.top, 0, rBox.bottom,
-                              Color.parseColor("#2B1204"), Color.parseColor("#0D0400"), Shader.TileMode.CLAMP));
-                      canvas.drawRoundRect(rBox, dp(18), dp(18), pFill);
+                              Color.parseColor("#2E1508"), Color.parseColor("#120702"), Shader.TileMode.CLAMP));
+                      canvas.drawRoundRect(rBox, dp(15), dp(15), pFill);
+                      pFill.setShader(null);
+
+                      pStroke.setStrokeWidth(dp(2));
+                      pStroke.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawRoundRect(rBox, dp(15), dp(15), pStroke);
+
+                      pText.setTextAlign(Paint.Align.CENTER);
+                      pText.setTextSize(dp(11.5f));
+                      pText.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawText("👑  ROYAL CASINO DEALER", cx, dp(25), pText);
+
+                      String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
+                      String modeStr = "♦  " + VARIATION_NAMES[currentVariation] + " TABLE  •  BOOT ₹" + bootAmount + "  ♦";
+                      if (currentVariation == 3) modeStr = "♦  HUKAM JOKER: [" + rankNames[hukamRank] + "]  •  BOOT ₹" + bootAmount + "  ♦";
+
+                      pText.setTextSize(dp(11));
+                      pText.setColor(Color.parseColor("#FFE082"));
+                      canvas.drawText(modeStr, cx, h * 0.195f, pText);
+                  }
+
+                  // ================= REAL DENOMINATION CASINO CHIPS & POT (NO '8'!) =================
+
+                  private void drawCenterPotAndRealChips(Canvas canvas, int w, int h) {
+                      float cx = w * 0.5f;
+                      float cy = h * 0.34f;
+
+                      // 1. Draw Actual Thrown Casino Chips in the Pot Area (Showing ₹200, ₹400, ₹800!)
+                      int count = tablePotChips.size();
+                      int startIdx = Math.max(0, count - 10); // Show up to 10 distinct recent chips clearly
+                      for (int i = startIdx; i < count; i++) {
+                          ChipToken ct = tablePotChips.get(i);
+                          float chipX = cx + dp(ct.offsetX);
+                          float chipY = cy - dp(28) + dp(ct.offsetY);
+                          if (flyingPotToWinner && winnerSeat >= 0) {
+                              float[] wx = {w * 0.40f, w * 0.14f, w * 0.86f};
+                              float[] wy = {h * 0.70f, h * 0.46f, h * 0.46f};
+                              chipX = chipX + (wx[winnerSeat] - chipX) * potWinAnimProgress;
+                              chipY = chipY + (wy[winnerSeat] - chipY) * potWinAnimProgress;
+                          }
+                          drawAuthenticCasinoChip(canvas, chipX, chipY, dp(15.5f), ct.amount, false);
+                      }
+
+                      // Hukam Wild Card next to Pot if Hukam mode
+                      if (currentVariation == 3) {
+                          drawRealistic3DCard(canvas, new Card(hukamRank, 0), true, true, cx - dp(115), cy + dp(2), dp(42), dp(58), 0f);
+                      }
+
+                      // 2. Royal Pot Display Box
+                      rBox.set(cx - dp(92), cy - dp(17), cx + dp(92), cy + dp(17));
+                      pFill.setShader(new LinearGradient(0, rBox.top, 0, rBox.bottom,
+                              Color.parseColor("#CC051F10"), Color.parseColor("#EE020F07"), Shader.TileMode.CLAMP));
+                      canvas.drawRoundRect(rBox, dp(17), dp(17), pFill);
                       pFill.setShader(null);
 
                       pStroke.setStrokeWidth(dp(2.2f));
                       pStroke.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawRoundRect(rBox, dp(18), dp(18), pStroke);
+                      canvas.drawRoundRect(rBox, dp(17), dp(17), pStroke);
 
-                      pText.setTextSize(dp(13));
-                      pText.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawText("👩🏻  LIVE DEALER", cx, dp(34), pText);
+                      pText.setTextAlign(Paint.Align.CENTER);
+                      pText.setTextSize(dp(15));
+                      pText.setColor(Color.parseColor("#00E676"));
+                      canvas.drawText("TOTAL POT: ₹" + pot, cx, cy + dp(5.5f), pText);
 
-                      // Glowing Cyan Mode Text with Stars: ★ OCTRO V7 ULTIMATE • AK47 ★
-                      String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
-                      String modeStr = "★  OCTRO V7 ULTIMATE • " + VARIATION_NAMES[currentVariation] + "  ★";
-                      if (currentVariation == 3) modeStr = "★  OCTRO V7 • HUKAM JOKER [" + rankNames[hukamRank] + "]  ★";
-
-                      pText.setTextSize(dp(12.5f));
-                      pText.setColor(Color.parseColor("#80FFFF"));
-                      pText.setShadowLayer(dp(8), 0, 0, Color.parseColor("#00E5FF"));
-                      canvas.drawText(modeStr, cx, h * 0.165f, pText);
-                      pText.setShadowLayer(0, 0, 0, 0);
-                  }
-
-                  private void drawCenter3DChipStacksAndPot(Canvas canvas, int w, int h) {
-                      float cx = w * 0.5f;
-                      float cy = h * 0.325f;
-
-                      // 1. 3D Stacked Casino Chip Towers above Pot (Exact match to 2nd Pic!)
-                      // Red Stack
-                      for (int i = 0; i < 4; i++) drawSingle3DChip(canvas, cx - dp(32), cy - dp(24) - i * dp(4), dp(14), "#E53935");
-                      // Blue Stack (Tallest)
-                      for (int i = 0; i < 6; i++) drawSingle3DChip(canvas, cx + dp(8), cy - dp(24) - i * dp(4), dp(14), "#1E88E5");
-                      // Purple Stack
-                      for (int i = 0; i < 3; i++) drawSingle3DChip(canvas, cx - dp(10), cy - dp(20) - i * dp(4), dp(12), "#8E24AA");
-                      // Gold Stack
-                      for (int i = 0; i < 4; i++) drawSingle3DChip(canvas, cx + dp(34), cy - dp(22) - i * dp(4), dp(13), "#FFB300");
-
-                      // Hukam Wild Card next to Pot if Hukam mode
-                      if (currentVariation == 3) {
-                          drawRealistic3DCard(canvas, new Card(hukamRank, 0), true, true, cx - dp(115), cy + dp(4), dp(42), dp(58), 0f);
-                      }
-
-                      // 2. Glowing Gold-Rimmed POT Pill
-                      rBox.set(cx - dp(92), cy - dp(18), cx + dp(92), cy + dp(18));
-                      pFill.setShader(new LinearGradient(0, rBox.top, 0, rBox.bottom,
-                              Color.parseColor("#261804"), Color.parseColor("#081409"), Shader.TileMode.CLAMP));
-                      canvas.drawRoundRect(rBox, dp(18), dp(18), pFill);
-                      pFill.setShader(null);
-
-                      pStroke.setStrokeWidth(dp(2.5f));
-                      pStroke.setColor(Color.parseColor("#FFD700"));
-                      pStroke.setShadowLayer(dp(8), 0, 0, Color.parseColor("#FFB300"));
-                      canvas.drawRoundRect(rBox, dp(18), dp(18), pStroke);
-                      pStroke.setShadowLayer(0, 0, 0, 0);
-
-                      // 3D Gold Coin Emblem inside Pot Pill
-                      pFill.setColor(Color.parseColor("#FFB300"));
-                      canvas.drawCircle(cx - dp(45), cy, dp(11), pFill);
-                      pStroke.setStrokeWidth(dp(1.5f));
-                      pStroke.setColor(Color.parseColor("#FFF59D"));
-                      canvas.drawCircle(cx - dp(45), cy, dp(8.5f), pStroke);
-                      pText.setTextSize(dp(10));
-                      pText.setColor(Color.parseColor("#5D4037"));
-                      canvas.drawText("₹", cx - dp(45), cy + dp(3.5f), pText);
-
-                      pText.setTextSize(dp(15.5f));
-                      pText.setColor(Color.parseColor("#80FFFF"));
-                      canvas.drawText("POT: ₹" + pot, cx + dp(12), cy + dp(5.5f), pText);
-
-                      // 3. Trophy Winner / Action Banner below Pot
-                      float by = cy + dp(36);
-                      rBox.set(cx - dp(148), by - dp(14), cx + dp(148), by + dp(14));
-                      pFill.setColor(Color.parseColor("#CC02180A"));
-                      canvas.drawRoundRect(rBox, dp(14), dp(14), pFill);
-                      pStroke.setStrokeWidth(dp(1.2f));
-                      pStroke.setColor(Color.parseColor("#44FFD700"));
-                      canvas.drawRoundRect(rBox, dp(14), dp(14), pStroke);
+                      // 3. Action / Winner Banner below Pot
+                      float by = cy + dp(34);
+                      rBox.set(cx - dp(150), by - dp(13.5f), cx + dp(150), by + dp(13.5f));
+                      pFill.setColor(Color.parseColor("#CC0A0502"));
+                      canvas.drawRoundRect(rBox, dp(13.5f), dp(13.5f), pFill);
+                      pStroke.setStrokeWidth(dp(1f));
+                      pStroke.setColor(Color.parseColor("#66FFD700"));
+                      canvas.drawRoundRect(rBox, dp(13.5f), dp(13.5f), pStroke);
 
                       pText.setTextSize(dp(11.5f));
-                      pText.setColor(Color.parseColor("#FFE082"));
-                      canvas.drawText("🏆  " + statusBanner, cx, by + dp(4.5f), pText);
+                      pText.setColor(Color.parseColor("#FFF59D"));
+                      canvas.drawText(statusBanner, cx, by + dp(4f), pText);
                   }
 
-                  private void drawSingle3DChip(Canvas canvas, float cx, float cy, float rx, String colHex) {
-                      float ry = rx * 0.58f;
-                      RectF oval = new RectF(cx - rx, cy - ry, cx + rx, cy + ry);
-                      // Side thickness
-                      RectF side = new RectF(cx - rx, cy - ry + dp(3), cx + rx, cy + ry + dp(3));
-                      pFill.setColor(Color.parseColor("#222222"));
-                      canvas.drawOval(side, pFill);
+                  /**
+                   * Draws an authentic 3D Las-Vegas Casino Chip with Dashed Rim & EXACT Amount (₹200, ₹400, ₹800)!
+                   */
+                  private void drawAuthenticCasinoChip(Canvas canvas, float cx, float cy, float radius, int amount, boolean isFlying) {
+                      // Chip Color based on Denomination: ₹200 = Royal Blue, ₹400 = Crimson Red, ₹800 = Purple, ₹1600+ = Gold
+                      String mainHex = "#1E88E5"; // ₹200 Blue
+                      if (amount <= 100) mainHex = "#43A047"; // ₹100 Green
+                      else if (amount == 400) mainHex = "#E53935"; // ₹400 Red
+                      else if (amount == 800) mainHex = "#8E24AA"; // ₹800 Purple
+                      else if (amount >= 1600) mainHex = "#FFB300"; // ₹1600 Gold
 
-                      pFill.setColor(Color.parseColor(colHex));
-                      canvas.drawOval(oval, pFill);
+                      // 1. 3D Chip Edge Thickness & Shadow
+                      pFill.setColor(Color.parseColor("#88000000"));
+                      canvas.drawCircle(cx + dp(1.5f), cy + dp(3f), radius, pFill);
 
-                      pStroke.setStrokeWidth(dp(1.8f));
-                      pStroke.setColor(Color.WHITE);
-                      canvas.drawOval(oval, pStroke);
+                      // 2. Main Chip Body Circle
+                      pFill.setColor(Color.parseColor(mainHex));
+                      canvas.drawCircle(cx, cy, radius, pFill);
 
-                      pText.setTextSize(dp(7.5f));
-                      pText.setColor(Color.WHITE);
-                      canvas.drawText("8", cx, cy + dp(2.5f), pText);
+                      // 3. Authentic White Dashed Casino Stripe around Outer Edge
+                      pDash.setStrokeWidth(dp(2.5f));
+                      pDash.setColor(Color.WHITE);
+                      canvas.drawCircle(cx, cy, radius - dp(2f), pDash);
+
+                      // 4. Inner Dark Center & Gold Ring
+                      pFill.setColor(Color.parseColor("#181818"));
+                      canvas.drawCircle(cx, cy, radius * 0.68f, pFill);
+
+                      pStroke.setStrokeWidth(dp(1.2f));
+                      pStroke.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawCircle(cx, cy, radius * 0.68f, pStroke);
+
+                      // 5. Crisp Exact Denomination Label ("200", "400", "800") - NO MORE '8'!
+                      pText.setTextAlign(Paint.Align.CENTER);
+                      String valStr = amount >= 1000 ? ("₹" + (amount / 1000f) + "K").replace(".0K", "K") : ("₹" + amount);
+                      pText.setTextSize(radius * (isFlying ? 0.52f : 0.54f));
+                      pText.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawText(valStr, cx, cy + radius * 0.20f, pText);
                   }
 
-                  // ================= GOLDEN LAUREL WREATH PLAYER POD & CARDS =================
+                  // ================= VIP PLAYER POD, LAST BET BADGE & CARDS =================
 
-                  private void drawWreathPlayerSeat(Canvas canvas, int idx, float podX, float podY, float cardsX, float cardsY) {
+                  private void drawVIPPlayerPodAndCards(Canvas canvas, int idx, float podX, float podY, float cardsX, float cardsY) {
                       boolean isTurn = isGameActive && (currentTurnSeat == idx);
                       boolean isWin = !isGameActive && (winnerSeat == idx);
-                      float rad = dp(33);
-                      float cy = podY - dp(12);
 
-                      // 1. Golden Laurel Wreath Branches around Avatar (Exact match to 2nd Pic!)
-                      drawGoldenLaurelWreath(canvas, podX, cy, rad + dp(5));
+                      // 1. Sleek Luxury Octro-Style Vertical VIP Card Pod (No messy cartoon leaves!)
+                      float podW = dp(98);
+                      float podH = dp(86);
+                      RectF rPod = new RectF(podX - podW / 2, podY - podH / 2, podX + podW / 2, podY + podH / 2);
 
-                      // 2. Dark Glossy Medallion Circle
-                      pFill.setShader(new RadialGradient(podX, cy - dp(8), rad,
-                              Color.parseColor("#263238"), Color.parseColor("#090C10"), Shader.TileMode.CLAMP));
-                      canvas.drawCircle(podX, cy, rad, pFill);
+                      // Drop Shadow
+                      pFill.setColor(Color.parseColor("#99000000"));
+                      canvas.drawRoundRect(new RectF(rPod.left + dp(2), rPod.top + dp(3), rPod.right + dp(2), rPod.bottom + dp(3)), dp(14), dp(14), pFill);
+
+                      // Pod Gradient Body
+                      pFill.setShader(new LinearGradient(0, rPod.top, 0, rPod.bottom,
+                              packed[idx] ? Color.parseColor("#CC263238") : Color.parseColor("#F21E140C"),
+                              packed[idx] ? Color.parseColor("#EE11171A") : Color.parseColor("#FA0B0704"),
+                              Shader.TileMode.CLAMP));
+                      canvas.drawRoundRect(rPod, dp(14), dp(14), pFill);
                       pFill.setShader(null);
 
-                      // Metallic Gold Ring + Turn Timer Arc
-                      pStroke.setStrokeWidth(dp(3f));
-                      pStroke.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawCircle(podX, cy, rad, pStroke);
-
+                      // Turn Glow Ring or Gold Metallic Frame
                       if (isTurn) {
-                          pStroke.setStrokeWidth(dp(4.5f));
+                          pStroke.setStrokeWidth(dp(3.5f));
                           pStroke.setColor(turnSecondsLeft > 5 ? Color.parseColor("#00E676") : Color.parseColor("#FF1744"));
-                          rArc.set(podX - rad, cy - rad, podX + rad, cy + rad);
-                          canvas.drawArc(rArc, -90f, (turnSecondsLeft / 15f) * 360f, false, pStroke);
+                          pStroke.setShadowLayer(dp(8), 0, 0, pStroke.getColor());
+                          canvas.drawRoundRect(rPod, dp(14), dp(14), pStroke);
+                          pStroke.setShadowLayer(0, 0, 0, 0);
+                      } else {
+                          pStroke.setStrokeWidth(dp(isWin ? 3f : 1.8f));
+                          pStroke.setColor(Color.parseColor(isWin ? "#FFD700" : "#C5A059"));
+                          canvas.drawRoundRect(rPod, dp(14), dp(14), pStroke);
                       }
 
-                      // 3. Custom Vector Avatar Inside Medallion (Sunglasses / 3D Boy / Gold Crown)
-                      drawCustomAvatarGraphic(canvas, idx, podX, cy, rad);
+                      // 2. Top Avatar Medallion Circle Overlapping Pod Top
+                      float avaRad = dp(20);
+                      float avaY = rPod.top + dp(6);
+                      pFill.setColor(Color.parseColor("#18222C"));
+                      canvas.drawCircle(podX, avaY, avaRad, pFill);
+                      pStroke.setStrokeWidth(dp(2f));
+                      pStroke.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawCircle(podX, avaY, avaRad, pStroke);
 
-                      // 4. Winner Crown Banner Above Avatar
                       pText.setTextAlign(Paint.Align.CENTER);
+                      pText.setTextSize(dp(18));
+                      String icon = (idx == 0) ? "👑" : (idx == 1 ? "🕶️" : "👩🏻");
+                      canvas.drawText(icon, podX, avaY + dp(6.5f), pText);
+
+                      // Winner Crown / Turn Timer Pill Above Avatar
                       if (isWin) {
-                          pText.setTextSize(dp(12.5f));
+                          pText.setTextSize(dp(12));
                           pText.setColor(Color.parseColor("#FFD700"));
-                          pText.setShadowLayer(dp(6), 0, 0, Color.BLACK);
-                          canvas.drawText("👑 WINNER!", podX, cy - rad - dp(10), pText);
-                          pText.setShadowLayer(0, 0, 0, 0);
+                          canvas.drawText("👑 WINNER!", podX, avaY - avaRad - dp(6), pText);
                       } else if (isTurn) {
                           pText.setTextSize(dp(10.5f));
                           pText.setColor(Color.parseColor("#00E676"));
-                          canvas.drawText("⏱ " + turnSecondsLeft + "s", podX, cy - rad - dp(10), pText);
+                          canvas.drawText("⏱ " + turnSecondsLeft + "s", podX, avaY - avaRad - dp(6), pText);
                       }
 
                       if (idx == 0 && System.currentTimeMillis() < emojiExpireTime) {
                           pText.setTextSize(dp(24));
-                          canvas.drawText(activeEmoji, podX - dp(48), cy, pText);
+                          canvas.drawText(activeEmoji, rPod.left - dp(22), podY, pText);
                       }
 
-                      // 5. Dark Gold-Bordered Name & Chips Plate
-                      rBox.set(podX - dp(54), podY + dp(14), podX + dp(54), podY + dp(48));
-                      pFill.setShader(new LinearGradient(0, rBox.top, 0, rBox.bottom,
-                              Color.parseColor("#241705"), Color.parseColor("#0A0602"), Shader.TileMode.CLAMP));
-                      canvas.drawRoundRect(rBox, dp(10), dp(10), pFill);
-                      pFill.setShader(null);
-
-                      pStroke.setStrokeWidth(dp(1.8f));
-                      pStroke.setColor(Color.parseColor("#FFD700"));
-                      canvas.drawRoundRect(rBox, dp(10), dp(10), pStroke);
-
+                      // 3. Player Name & Chips Balance inside Pod
                       pText.setTextSize(dp(10.5f));
                       pText.setColor(Color.WHITE);
-                      canvas.drawText(seatNames[idx], podX, podY + dp(28), pText);
+                      canvas.drawText(seatNames[idx], podX, rPod.top + dp(39), pText);
 
                       pText.setTextSize(dp(11.5f));
-                      pText.setColor(Color.parseColor("#FFE082"));
-                      canvas.drawText("₹" + chips[idx], podX, podY + dp(43), pText);
+                      pText.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawText("₹" + chips[idx], podX, rPod.top + dp(55), pText);
 
-                      // 6. 3D Glossy Status Pill (Blue TRAIL/PAIR for Bots, Red PAIR for Player like 2nd Pic!)
-                      rBox.set(podX - dp(42), podY + dp(51), podX + dp(42), podY + dp(69));
-                      int cTop, cBot;
-                      if (packed[idx]) {
-                          cTop = Color.parseColor("#EF5350"); cBot = Color.parseColor("#B71C1C");
-                      } else if (idx == 0) {
-                          cTop = Color.parseColor("#E53935"); cBot = Color.parseColor("#8E0000");
-                      } else {
-                          cTop = Color.parseColor("#29B6F6"); cBot = Color.parseColor("#01579B");
-                      }
-                      pFill.setShader(new LinearGradient(0, rBox.top, 0, rBox.bottom, cTop, cBot, Shader.TileMode.CLAMP));
-                      canvas.drawRoundRect(rBox, dp(9), dp(9), pFill);
-                      pFill.setShader(null);
-
-                      pStroke.setStrokeWidth(dp(1.2f));
-                      pStroke.setColor(Color.parseColor("#80D8FF"));
-                      canvas.drawRoundRect(rBox, dp(9), dp(9), pStroke);
+                      // 4. Bottom Status Ribbon inside Pod (BLIND / SEEN / PACKED / HAND RANK)
+                      RectF rRibbon = new RectF(rPod.left + dp(8), rPod.bottom - dp(22), rPod.right - dp(8), rPod.bottom - dp(5));
+                      int rCol = packed[idx] ? Color.parseColor("#C62828")
+                              : (seen[idx] || revealAllCards ? Color.parseColor("#0277BD") : Color.parseColor("#2E7D32"));
+                      pFill.setColor(rCol);
+                      canvas.drawRoundRect(rRibbon, dp(7), dp(7), pFill);
 
                       pText.setTextSize(dp(9.5f));
                       pText.setColor(Color.WHITE);
-                      canvas.drawText(seatBadges[idx], podX, podY + dp(63.5f), pText);
+                      canvas.drawText(seatBadges[idx], podX, rRibbon.centerY() + dp(3.5f), pText);
 
-                      // 7. 3 Fanned HD Playing Cards with Dealing Animation
+                      // 5. Individual Last Bet Chip Badge next to Pod (Shows "₹200" or "₹400" played by this player!)
+                      if (lastSeatBet[idx] > 0 && isGameActive) {
+                          float betChipX = (idx == 2) ? (rPod.left - dp(18)) : (rPod.right + dp(18));
+                          float betChipY = rPod.top + dp(16);
+                          drawAuthenticCasinoChip(canvas, betChipX, betChipY, dp(13.5f), lastSeatBet[idx], false);
+                      }
+
+                      // 6. 3 Fanned HD Playing Cards Next to Pod
                       Card[] hCards = hands[idx];
                       if (hCards == null || hCards[0] == null) return;
 
@@ -1180,81 +1166,44 @@ jobs:
                       }
                   }
 
-                  private void drawGoldenLaurelWreath(Canvas canvas, float cx, float cy, float r) {
-                      pFill.setColor(Color.parseColor("#FFB300"));
-                      for (int side = -1; side <= 1; side += 2) {
-                          for (int a = 25; a <= 155; a += 18) {
-                              double radAngle = Math.toRadians(90 + side * a);
-                              float lx = cx + (float) (Math.cos(radAngle) * r);
-                              float ly = cy + (float) (Math.sin(radAngle) * r);
-                              canvas.save();
-                              canvas.translate(lx, ly);
-                              canvas.rotate(side * (a - 90));
-                              canvas.drawOval(new RectF(-dp(5), -dp(2.5f), dp(5), dp(2.5f)), pFill);
-                              canvas.restore();
-                          }
-                      }
-                  }
-
-                  private void drawCustomAvatarGraphic(Canvas canvas, int idx, float cx, float cy, float r) {
-                      if (idx == 1) {
-                          // RAVI PRO: Cool Dark Aviator Sunglasses Vector
-                          pFill.setColor(Color.parseColor("#111111"));
-                          RectF leftLens = new RectF(cx - dp(19), cy - dp(6), cx - dp(2), cy + dp(6));
-                          RectF rightLens = new RectF(cx + dp(2), cy - dp(6), cx + dp(19), cy + dp(6));
-                          canvas.drawRoundRect(leftLens, dp(4), dp(4), pFill);
-                          canvas.drawRoundRect(rightLens, dp(4), dp(4), pFill);
-                          pStroke.setStrokeWidth(dp(1.8f));
-                          pStroke.setColor(Color.parseColor("#CFD8DC"));
-                          canvas.drawRoundRect(leftLens, dp(4), dp(4), pStroke);
-                          canvas.drawRoundRect(rightLens, dp(4), dp(4), pStroke);
-                          canvas.drawLine(cx - dp(2), cy - dp(2), cx + dp(2), cy - dp(2), pStroke);
-                      } else if (idx == 2) {
-                          // PRIYA VIP: Stylish 3D Avatar Portrait
-                          pText.setTextAlign(Paint.Align.CENTER);
-                          pText.setTextSize(dp(26));
-                          canvas.drawText("🧑🏻", cx, cy + dp(9), pText);
-                      } else {
-                          // U (VIP): Royal Golden Crown with Jewels
-                          pText.setTextAlign(Paint.Align.CENTER);
-                          pText.setTextSize(dp(26));
-                          canvas.drawText("👑", cx, cy + dp(9), pText);
-                      }
-                  }
-
                   private void drawRealistic3DCard(Canvas canvas, Card c, boolean faceUp, boolean isWild,
                                                    float cx, float cy, float cw, float ch, float angle) {
                       canvas.save();
                       canvas.translate(cx, cy);
                       canvas.rotate(angle);
 
-                      // Drop Shadow behind each card
+                      // Drop Shadow
                       RectF rShadow = new RectF(-cw / 2 + dp(2), -ch / 2 + dp(3), cw / 2 + dp(2), ch / 2 + dp(3));
-                      pFill.setColor(Color.parseColor("#66000000"));
+                      pFill.setColor(Color.parseColor("#77000000"));
                       canvas.drawRoundRect(rShadow, dp(7), dp(7), pFill);
 
                       RectF rc = new RectF(-cw / 2, -ch / 2, cw / 2, ch / 2);
 
                       if (!faceUp || c == null) {
-                          // Royal Crimson & Gold Filigree Back
+                          // Royal Deep Crimson & Gold Luxury Back
                           pFill.setShader(new LinearGradient(0, rc.top, 0, rc.bottom,
-                                  Color.parseColor("#B71C1C"), Color.parseColor("#4A0000"), Shader.TileMode.CLAMP));
+                                  Color.parseColor("#9A0007"), Color.parseColor("#3E0002"), Shader.TileMode.CLAMP));
                           canvas.drawRoundRect(rc, dp(7), dp(7), pFill);
                           pFill.setShader(null);
 
-                          pStroke.setStrokeWidth(dp(1.8f));
+                          pStroke.setStrokeWidth(dp(1.6f));
                           pStroke.setColor(Color.parseColor("#FFD700"));
                           canvas.drawRoundRect(rc, dp(7), dp(7), pStroke);
 
+                          RectF rIn = new RectF(rc.left + dp(4), rc.top + dp(4), rc.right - dp(4), rc.bottom - dp(4));
+                          pStroke.setStrokeWidth(dp(0.8f));
+                          pStroke.setColor(Color.parseColor("#88FFD700"));
+                          canvas.drawRoundRect(rIn, dp(4), dp(4), pStroke);
+
                           pText.setTextAlign(Paint.Align.CENTER);
-                          pText.setTextSize(ch * 0.30f);
+                          pText.setTextSize(ch * 0.28f);
                           pText.setColor(Color.parseColor("#FFD700"));
-                          canvas.drawText("⚜", 0, ch * 0.10f, pText);
+                          canvas.drawText("👑", 0, ch * 0.10f, pText);
                           canvas.restore();
                           return;
                       }
 
-                      // Crisp White or Golden Wild Card Face
+                      // Face Up Card
                       if (isWild) {
                           pFill.setShader(new LinearGradient(0, rc.top, 0, rc.bottom,
                                   Color.parseColor("#FFFDE7"), Color.parseColor("#FFE082"), Shader.TileMode.CLAMP));
@@ -1264,29 +1213,26 @@ jobs:
                       canvas.drawRoundRect(rc, dp(7), dp(7), pFill);
                       pFill.setShader(null);
 
-                      pStroke.setStrokeWidth(dp(isWild ? 2.5f : 1.2f));
-                      pStroke.setColor(isWild ? Color.parseColor("#FFB300") : Color.parseColor("#B0BEC5"));
+                      pStroke.setStrokeWidth(dp(isWild ? 2.4f : 1.2f));
+                      pStroke.setColor(isWild ? Color.parseColor("#FFA000") : Color.parseColor("#B0BEC5"));
                       canvas.drawRoundRect(rc, dp(7), dp(7), pStroke);
 
-                      int sCol = (c.suit == 1 || c.suit == 2) ? Color.parseColor("#E50000") : Color.parseColor("#111111");
+                      int sCol = (c.suit == 1 || c.suit == 2) ? Color.parseColor("#D50000") : Color.parseColor("#111111");
                       pText.setColor(sCol);
 
-                      // Top-Left Index
                       pText.setTextAlign(Paint.Align.LEFT);
                       pText.setTextSize(ch * 0.23f);
                       canvas.drawText(c.getRankStr(), -cw / 2 + dp(4.5f), -ch / 2 + ch * 0.25f, pText);
                       pText.setTextSize(ch * 0.19f);
                       canvas.drawText(c.getSuitStr(), -cw / 2 + dp(4.5f), -ch / 2 + ch * 0.43f, pText);
 
-                      // Giant Center Suit Pip
                       pText.setTextAlign(Paint.Align.CENTER);
                       pText.setTextSize(ch * 0.40f);
                       canvas.drawText(c.getSuitStr(), dp(2), ch * 0.21f, pText);
 
-                      // ★WILD Stamp at bottom (Exact match to 2nd Pic!)
                       if (isWild) {
                           pText.setColor(Color.parseColor("#D84315"));
-                          pText.setTextSize(ch * 0.145f);
+                          pText.setTextSize(ch * 0.14f);
                           canvas.drawText("★WILD", 0, ch * 0.43f, pText);
                       }
 
@@ -1294,11 +1240,11 @@ jobs:
                   }
               }
 
-              // ================= 5. GAMEPLAY & ANIMATION ENGINE =================
+              // ================= 5. GAMEPLAY & EXACT AMOUNT CHIP ANIMATION ENGINE =================
 
               private void triggerCardDealAnimation() {
                   ValueAnimator anim = ValueAnimator.ofFloat(0.1f, 1f);
-                  anim.setDuration(450);
+                  anim.setDuration(420);
                   anim.setInterpolator(new DecelerateInterpolator());
                   anim.addUpdateListener(a -> {
                       dealAnimProgress = (float) a.getAnimatedValue();
@@ -1307,15 +1253,37 @@ jobs:
                   anim.start();
               }
 
-              private void triggerFlyingChipAnimation(int fromSeat) {
+              /**
+               * Launches a 3D Casino Chip from the player's seat into the Center Pot with the EXACT bet amount (₹200, ₹400, ₹800)!
+               */
+              private void animateChipThrowToPot(int fromSeat, int exactAmount) {
                   flyingChipFromSeat = fromSeat;
+                  flyingChipAmount = exactAmount;
+                  lastSeatBet[fromSeat] = exactAmount;
+
                   ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
-                  anim.setDuration(350);
+                  anim.setDuration(480);
+                  anim.setInterpolator(new DecelerateInterpolator());
                   anim.addUpdateListener(a -> {
                       flyingChipProgress = (float) a.getAnimatedValue();
                       if (tableCanvas != null) tableCanvas.invalidate();
                   });
+                  anim.addListener(new android.animation.AnimatorListenerAdapter() {
+                      @Override
+                      public void onAnimationEnd(android.animation.Animator animation) {
+                          flyingChipProgress = 1f;
+                          addChipTokenToPot(exactAmount);
+                          if (tableCanvas != null) tableCanvas.invalidate();
+                      }
+                  });
                   anim.start();
+              }
+
+              private void addChipTokenToPot(int amount) {
+                  tablePotChips.add(new ChipToken(
+                          -44 + random.nextInt(88),
+                          -10 + random.nextInt(20),
+                          amount));
               }
 
               private void initDeck() {
@@ -1327,11 +1295,16 @@ jobs:
               }
 
               private void startNewRound() {
+                  tablePotChips.clear();
+                  flyingPotToWinner = false;
+                  potWinAnimProgress = 1f;
+
                   for (int i = 0; i < 3; i++) {
                       if (chips[i] < 1000) chips[i] = 150000;
                       seen[i] = false;
                       packed[i] = !activeSeat[i];
                       seatBadges[i] = "BLIND";
+                      lastSeatBet[i] = activeSeat[i] ? bootAmount : 0;
                   }
 
                   initDeck();
@@ -1356,6 +1329,7 @@ jobs:
                       if (activeSeat[s]) {
                           chips[s] -= bootAmount;
                           pot += bootAmount;
+                          addChipTokenToPot(bootAmount);
                       }
                   }
 
@@ -1366,7 +1340,7 @@ jobs:
                   turnSecondsLeft = 15;
                   isStakeDoubledThisTurn = false;
 
-                  statusBanner = "Boot ₹" + bootAmount + " Collected! Your Turn";
+                  statusBanner = "Boot ₹" + bootAmount + " Collected! Play Blind ₹" + currentStake;
                   playSound(ToneGenerator.TONE_PROP_BEEP2, 120);
                   triggerCardDealAnimation();
                   updateHUD();
@@ -1396,7 +1370,9 @@ jobs:
                   pot += betAmt;
                   isStakeDoubledThisTurn = false;
                   playSound(ToneGenerator.TONE_PROP_BEEP, 70);
-                  triggerFlyingChipAnimation(0);
+
+                  // Animate Exact Bet Amount Chip (e.g. ₹200 or ₹400) flying from YOU to POT!
+                  animateChipThrowToPot(0, betAmt);
 
                   statusBanner = "You played " + (seen[0] ? "Chaal ₹" : "Blind ₹") + betAmt;
                   advanceTurn();
@@ -1451,7 +1427,7 @@ jobs:
                   updateHUD();
 
                   if (currentTurnSeat != 0 && isGameActive) {
-                      mainHandler.postDelayed(() -> executeBotTurn(currentTurnSeat), 1000);
+                      mainHandler.postDelayed(() -> executeBotTurn(currentTurnSeat), 1050);
                   }
               }
 
@@ -1491,9 +1467,9 @@ jobs:
                       checkRemainingOrAdvance();
                       return;
                   } else if (alive == 2 && pot >= 1800 && rand < 45) {
-                      statusBanner = seatNames[botSeat] + " called SHOW!";
+                      statusBanner = seatNames[botSeat] + " demanded a SHOW!";
                       updateHUD();
-                      mainHandler.postDelayed(this::showDown, 800);
+                      mainHandler.postDelayed(this::showDown, 850);
                       return;
                   }
 
@@ -1501,8 +1477,11 @@ jobs:
                   chips[botSeat] -= betAmt;
                   pot += betAmt;
                   playSound(ToneGenerator.TONE_PROP_BEEP, 60);
-                  triggerFlyingChipAnimation(botSeat);
-                  statusBanner = seatNames[botSeat] + " played ₹" + betAmt;
+
+                  // Animate Exact Bot Bet Chip (₹200 or ₹400) flying into Pot!
+                  animateChipThrowToPot(botSeat, betAmt);
+
+                  statusBanner = seatNames[botSeat] + " played " + (seen[botSeat] ? "Chaal ₹" : "Blind ₹") + betAmt;
                   advanceTurn();
               }
 
@@ -1526,7 +1505,8 @@ jobs:
                   isGameActive = false;
                   revealAllCards = true;
                   winnerSeat = winSeat;
-                  chips[winSeat] += pot;
+                  int wonPot = pot;
+                  chips[winSeat] += wonPot;
                   pot = 0;
                   statusBanner = banner;
                   playSound(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 250);
@@ -1534,6 +1514,25 @@ jobs:
                   for (int i = 0; i < 3; i++) {
                       if (activeSeat[i]) seatBadges[i] = getVariationHandName(hands[i]);
                   }
+
+                  // Animate all Pot Chips sweeping to Winner Seat!
+                  flyingPotToWinner = true;
+                  ValueAnimator winAnim = ValueAnimator.ofFloat(0f, 1f);
+                  winAnim.setDuration(650);
+                  winAnim.addUpdateListener(a -> {
+                      potWinAnimProgress = (float) a.getAnimatedValue();
+                      if (tableCanvas != null) tableCanvas.invalidate();
+                  });
+                  winAnim.addListener(new android.animation.AnimatorListenerAdapter() {
+                      @Override
+                      public void onAnimationEnd(android.animation.Animator animation) {
+                          tablePotChips.clear();
+                          flyingPotToWinner = false;
+                          if (tableCanvas != null) tableCanvas.invalidate();
+                      }
+                  });
+                  winAnim.start();
+
                   updateHUD();
                   if (isOnlineMode) pushStateToTelegramGroup(banner);
               }
@@ -1592,7 +1591,7 @@ jobs:
                   stateVersion = 1;
                   showGameTable();
                   startNewRound();
-                  sendTelegramLog(TG_GROUP_ID, "🎲 *[V7 3D ROOM CREATED]* Code: `" + currentRoomId + "`");
+                  sendTelegramLog(TG_GROUP_ID, "🎲 *[V8 ROYAL ROOM CREATED]* Code: `" + currentRoomId + "`");
               }
 
               private void joinTelegramRoom() {
@@ -1675,9 +1674,11 @@ jobs:
                           stateVersion = remoteVer;
 
                           mainHandler.post(() -> {
-                              currentVariation = d.optInt("g", 2);
+                              currentVariation = d.optInt("g", 0);
                               hukamRank = d.optInt("j", 14);
-                              pot = d.optInt("p", 200);
+                              int newPot = d.optInt("p", 200);
+                              int diff = Math.max(200, newPot - pot);
+                              pot = newPot;
                               currentStake = d.optInt("s", 200);
                               boolean prevActive = isGameActive;
                               isGameActive = d.optInt("a", 1) == 1;
@@ -1696,6 +1697,7 @@ jobs:
                               }
 
                               statusBanner = d.optString("m", "Game On");
+                              animateChipThrowToPot(1, diff);
 
                               if (!isGameActive && prevActive) {
                                   revealAllCards = true;
@@ -1880,7 +1882,7 @@ jobs:
                               }
                           }
                       } else if (cmd.equals("/help")) {
-                          sendTelegramLog(replyChatId, "🛠 *Octro V7 3D Admin Commands:*\n`/chips 1000000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
+                          sendTelegramLog(replyChatId, "🛠 *Octro V8 Royal Admin Commands:*\n`/chips 1000000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
                       }
                   });
               }
@@ -1916,6 +1918,11 @@ jobs:
                   } catch (Exception e) { return null; }
               }
 
+              private static class ChipToken {
+                  int offsetX, offsetY, amount;
+                  ChipToken(int x, int y, int amt) { offsetX = x; offsetY = y; amount = amt; }
+              }
+
               private static class Card {
                   int rank, suit;
                   Card(int r, int s) { rank = r; suit = s; }
@@ -1928,11 +1935,11 @@ jobs:
           }
           EOF
 
-      - name: Force Clean Build Debug APK (V7 3D Neon)
+      - name: Force Clean Build Debug APK (V8 Royal 3D)
         run: gradle clean assembleDebug --no-build-cache --rerun-tasks
 
-      - name: Upload V7 3D Neon APK Artifact
+      - name: Upload V8 Royal 3D APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Octro-V7-3D-Neon-Gold-APK
+          name: Octro-V8-Royal-3D-APK
           path: app/build/outputs/apk/debug/app-debug.apk
