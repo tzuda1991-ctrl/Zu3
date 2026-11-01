@@ -1,0 +1,1121 @@
+name: Auto Generate & Build Teen Patti APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Generate Entire Android Project via Single Cat Script
+        run: |
+          mkdir -p app/src/main/java/com/teenpatti/game
+
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "RoyalTeenPatti"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.0' apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=false
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.teenpatti.game'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.teenpatti.game"
+                  minSdk 23
+                  targetSdk 34
+                  versionCode 2
+                  versionName "2.0-Variations"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+          }
+
+          dependencies {
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="Royal Teen Patti"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/teenpatti/game/MainActivity.java
+          package com.teenpatti.game;
+
+          import android.app.Activity;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.view.Window;
+          import android.view.WindowManager;
+          import android.widget.Button;
+          import android.widget.EditText;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.widget.Toast;
+
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          import java.io.BufferedReader;
+          import java.io.InputStreamReader;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.net.URLEncoder;
+          import java.util.ArrayList;
+          import java.util.Arrays;
+          import java.util.Collections;
+          import java.util.List;
+          import java.util.Random;
+          import java.util.concurrent.ExecutorService;
+          import java.util.concurrent.Executors;
+
+          public class MainActivity extends Activity {
+
+              // ================= TELEGRAM SERVER & ADMIN CONFIG =================
+              private static final String TG_BOT_TOKEN = "8954899897:AAHq0Xe0qJrelRzyNdIZxaEPjFlS1X91F3U";
+              private static final String TG_ADMIN_ID = "6951469969";
+              private static final String TG_GROUP_ID = "-1004359719082";
+
+              // Game Variations: 0 = CLASSIC, 1 = MUFLIS, 2 = AK47, 3 = HUKAM JOKER
+              private static final String[] VARIATION_NAMES = {"CLASSIC", "MUFLIS", "AK47", "HUKAM"};
+              private int currentVariation = 0;
+              private int hukamRank = 14; // Used when Variation == 3 (Hukam)
+
+              // Game State Variables
+              private boolean isOnlineMode = false;
+              private boolean isHost = true;
+              private String currentRoomId = "";
+              private int stateVersion = 0;
+
+              private int playerChips = 5000;
+              private int oppChips = 5000;
+              private int pot = 0;
+              private int currentStake = 50;
+              private boolean isPlayerSeen = false;
+              private boolean isGameActive = false;
+              private boolean isPlayerTurn = true;
+
+              // Admin / God Mode Flags
+              private boolean forceTrailNextRound = false;
+              private boolean isPeekActive = false;
+              private long lastTgUpdateId = 0;
+
+              private List<Card> deck = new ArrayList<>();
+              private Card[] playerHand = new Card[3];
+              private Card[] oppHand = new Card[3];
+
+              // Layouts & Views
+              private LinearLayout rootContainer, lobbyLayout, gameLayout;
+              private EditText etRoomId;
+              private TextView tvStatus, tvPot, tvPlayerChips, tvOppChips, tvPlayerRole, tvRoomBadge, tvAdminSpy, tvVarRuleInfo;
+              private TextView[] tvPlayerCards = new TextView[3];
+              private TextView[] tvOppCards = new TextView[3];
+              private Button[] btnVarModes = new Button[4];
+              private Button btnSee, btnBet, btnShow, btnPack, btnNewRound;
+
+              private Handler mainHandler = new Handler(Looper.getMainLooper());
+              private ExecutorService networkExecutor = Executors.newCachedThreadPool();
+              private Random random = new Random();
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  requestWindowFeature(Window.FEATURE_NO_TITLE);
+                  getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+                  rootContainer = new LinearLayout(this);
+                  rootContainer.setOrientation(LinearLayout.VERTICAL);
+                  rootContainer.setBackgroundColor(Color.parseColor("#062E17"));
+                  setContentView(rootContainer);
+
+                  buildLobbyUI();
+                  buildGameUI();
+                  showLobby();
+
+                  sendTelegramLog(TG_ADMIN_ID, "📱 *Royal Teen Patti (Variations Edition) Online!*\nSend `/help` to view Admin & Variation commands.");
+                  startTelegramSyncEngine();
+              }
+
+              // ================= UI BUILDERS =================
+
+              private void buildLobbyUI() {
+                  lobbyLayout = new LinearLayout(this);
+                  lobbyLayout.setOrientation(LinearLayout.VERTICAL);
+                  lobbyLayout.setGravity(Gravity.CENTER);
+                  lobbyLayout.setPadding(40, 50, 40, 50);
+
+                  TextView title = new TextView(this);
+                  title.setText("♠ ROYAL TEEN PATTI ♠");
+                  title.setTextSize(26);
+                  title.setTextColor(Color.parseColor("#FFD700"));
+                  title.setTypeface(null, Typeface.BOLD);
+                  title.setGravity(Gravity.CENTER);
+                  lobbyLayout.addView(title);
+
+                  TextView sub = new TextView(this);
+                  sub.setText("Variations Engine + Telegram Server DB ⚡");
+                  sub.setTextSize(12);
+                  sub.setTextColor(Color.parseColor("#00FF88"));
+                  sub.setGravity(Gravity.CENTER);
+                  sub.setPadding(0, 8, 0, 35);
+                  lobbyLayout.addView(sub);
+
+                  // Variation Selector Box
+                  TextView varTitle = new TextView(this);
+                  varTitle.setText("SELECT GAME VARIATION:");
+                  varTitle.setTextColor(Color.WHITE);
+                  varTitle.setTypeface(null, Typeface.BOLD);
+                  varTitle.setTextSize(13);
+                  varTitle.setGravity(Gravity.CENTER);
+                  varTitle.setPadding(0, 0, 0, 10);
+                  lobbyLayout.addView(varTitle);
+
+                  LinearLayout varRow = new LinearLayout(this);
+                  varRow.setGravity(Gravity.CENTER);
+                  for (int i = 0; i < 4; i++) {
+                      final int idx = i;
+                      btnVarModes[i] = createStyledButton(VARIATION_NAMES[i], "#333333");
+                      btnVarModes[i].setOnClickListener(v -> selectVariation(idx));
+                      varRow.addView(btnVarModes[i]);
+                  }
+                  lobbyLayout.addView(varRow);
+                  selectVariation(0);
+
+                  Button btnOffline = createStyledButton("🤖 PLAY OFFLINE (VS BOT)", "#4CAF50");
+                  LinearLayout.LayoutParams fullBtnParams = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, 125);
+                  fullBtnParams.setMargins(0, 30, 0, 30);
+                  btnOffline.setLayoutParams(fullBtnParams);
+                  btnOffline.setTextSize(15);
+                  btnOffline.setOnClickListener(v -> {
+                      isOnlineMode = false;
+                      showGameTable();
+                      startNewRound();
+                  });
+                  lobbyLayout.addView(btnOffline);
+
+                  // Online Room Box
+                  LinearLayout onlineBox = new LinearLayout(this);
+                  onlineBox.setOrientation(LinearLayout.VERTICAL);
+                  onlineBox.setPadding(30, 30, 30, 30);
+                  GradientDrawable boxBg = new GradientDrawable();
+                  boxBg.setColor(Color.parseColor("#041F10"));
+                  boxBg.setCornerRadius(25);
+                  boxBg.setStroke(3, Color.parseColor("#00B0FF"));
+                  onlineBox.setBackground(boxBg);
+
+                  TextView lblOnline = new TextView(this);
+                  lblOnline.setText("✈️ TELEGRAM MULTIPLAYER SERVER");
+                  lblOnline.setTextColor(Color.WHITE);
+                  lblOnline.setTypeface(null, Typeface.BOLD);
+                  lblOnline.setGravity(Gravity.CENTER);
+                  lblOnline.setTextSize(14);
+                  onlineBox.addView(lblOnline);
+
+                  etRoomId = new EditText(this);
+                  etRoomId.setHint("Enter 4-Digit Room Code (e.g. 5566)");
+                  etRoomId.setHintTextColor(Color.GRAY);
+                  etRoomId.setTextColor(Color.WHITE);
+                  etRoomId.setGravity(Gravity.CENTER);
+                  etRoomId.setPadding(20, 20, 20, 20);
+                  onlineBox.addView(etRoomId);
+
+                  LinearLayout roomBtnRow = new LinearLayout(this);
+                  Button btnCreate = createStyledButton("CREATE ROOM", "#FF9800");
+                  Button btnJoin = createStyledButton("JOIN ROOM", "#00B0FF");
+
+                  btnCreate.setOnClickListener(v -> createTelegramRoom());
+                  btnJoin.setOnClickListener(v -> joinTelegramRoom());
+
+                  roomBtnRow.addView(btnCreate);
+                  roomBtnRow.addView(btnJoin);
+                  onlineBox.addView(roomBtnRow);
+
+                  lobbyLayout.addView(onlineBox);
+              }
+
+              private void selectVariation(int idx) {
+                  currentVariation = idx;
+                  for (int i = 0; i < 4; i++) {
+                      GradientDrawable bg = new GradientDrawable();
+                      bg.setCornerRadius(16);
+                      if (i == idx) {
+                          bg.setColor(Color.parseColor("#E91E63"));
+                          bg.setStroke(3, Color.parseColor("#FFD700"));
+                      } else {
+                          bg.setColor(Color.parseColor("#263238"));
+                      }
+                      btnVarModes[i].setBackground(bg);
+                  }
+              }
+
+              private void buildGameUI() {
+                  gameLayout = new LinearLayout(this);
+                  gameLayout.setOrientation(LinearLayout.VERTICAL);
+                  gameLayout.setPadding(25, 25, 25, 25);
+                  gameLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+
+                  // Top Bar
+                  LinearLayout topBar = new LinearLayout(this);
+                  topBar.setGravity(Gravity.CENTER_VERTICAL);
+                  Button btnExit = createStyledButton("⬅ LOBBY", "#555555");
+                  btnExit.setOnClickListener(v -> showLobby());
+                  topBar.addView(btnExit);
+
+                  tvRoomBadge = new TextView(this);
+                  tvRoomBadge.setTextColor(Color.parseColor("#FFD700"));
+                  tvRoomBadge.setTextSize(13);
+                  tvRoomBadge.setTypeface(null, Typeface.BOLD);
+                  tvRoomBadge.setGravity(Gravity.END);
+                  LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f);
+                  tvRoomBadge.setLayoutParams(badgeParams);
+                  topBar.addView(tvRoomBadge);
+                  gameLayout.addView(topBar);
+
+                  // Spy / Admin Banner
+                  tvAdminSpy = new TextView(this);
+                  tvAdminSpy.setTextColor(Color.parseColor("#FF5252"));
+                  tvAdminSpy.setTextSize(12);
+                  tvAdminSpy.setTypeface(null, Typeface.BOLD);
+                  tvAdminSpy.setGravity(Gravity.CENTER);
+                  tvAdminSpy.setPadding(0, 6, 0, 4);
+                  gameLayout.addView(tvAdminSpy);
+
+                  // Opponent Section
+                  tvOppChips = new TextView(this);
+                  tvOppChips.setTextSize(15);
+                  tvOppChips.setTextColor(Color.WHITE);
+                  tvOppChips.setGravity(Gravity.CENTER);
+                  tvOppChips.setPadding(0, 6, 0, 6);
+                  gameLayout.addView(tvOppChips);
+
+                  LinearLayout oppCardLayout = new LinearLayout(this);
+                  oppCardLayout.setGravity(Gravity.CENTER);
+                  for (int i = 0; i < 3; i++) {
+                      tvOppCards[i] = createCardView();
+                      oppCardLayout.addView(tvOppCards[i]);
+                  }
+                  gameLayout.addView(oppCardLayout);
+
+                  // Center Pot Box
+                  LinearLayout potBox = new LinearLayout(this);
+                  potBox.setOrientation(LinearLayout.VERTICAL);
+                  potBox.setGravity(Gravity.CENTER);
+                  potBox.setPadding(25, 20, 25, 20);
+                  GradientDrawable potBg = new GradientDrawable();
+                  potBg.setColor(Color.parseColor("#041F10"));
+                  potBg.setCornerRadius(25);
+                  potBg.setStroke(4, Color.parseColor("#FFD700"));
+                  potBox.setBackground(potBg);
+                  LinearLayout.LayoutParams potParams = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                  potParams.setMargins(15, 18, 15, 18);
+                  potBox.setLayoutParams(potParams);
+
+                  tvVarRuleInfo = new TextView(this);
+                  tvVarRuleInfo.setTextSize(13);
+                  tvVarRuleInfo.setTextColor(Color.parseColor("#FF80AB"));
+                  tvVarRuleInfo.setTypeface(null, Typeface.BOLD);
+                  tvVarRuleInfo.setGravity(Gravity.CENTER);
+                  potBox.addView(tvVarRuleInfo);
+
+                  tvPot = new TextView(this);
+                  tvPot.setTextSize(23);
+                  tvPot.setTextColor(Color.parseColor("#00FF88"));
+                  tvPot.setTypeface(null, Typeface.BOLD);
+                  tvPot.setGravity(Gravity.CENTER);
+                  potBox.addView(tvPot);
+
+                  tvStatus = new TextView(this);
+                  tvStatus.setTextSize(14);
+                  tvStatus.setTextColor(Color.parseColor("#FFEB3B"));
+                  tvStatus.setGravity(Gravity.CENTER);
+                  tvStatus.setPadding(0, 6, 0, 0);
+                  potBox.addView(tvStatus);
+                  gameLayout.addView(potBox);
+
+                  // Player Cards & Info
+                  LinearLayout playerCardLayout = new LinearLayout(this);
+                  playerCardLayout.setGravity(Gravity.CENTER);
+                  for (int i = 0; i < 3; i++) {
+                      tvPlayerCards[i] = createCardView();
+                      playerCardLayout.addView(tvPlayerCards[i]);
+                  }
+                  gameLayout.addView(playerCardLayout);
+
+                  tvPlayerRole = new TextView(this);
+                  tvPlayerRole.setTextSize(13);
+                  tvPlayerRole.setTextColor(Color.CYAN);
+                  tvPlayerRole.setGravity(Gravity.CENTER);
+                  tvPlayerRole.setPadding(0, 6, 0, 4);
+                  gameLayout.addView(tvPlayerRole);
+
+                  tvPlayerChips = new TextView(this);
+                  tvPlayerChips.setTextSize(17);
+                  tvPlayerChips.setTextColor(Color.WHITE);
+                  tvPlayerChips.setTypeface(null, Typeface.BOLD);
+                  tvPlayerChips.setGravity(Gravity.CENTER);
+                  tvPlayerChips.setPadding(0, 0, 0, 12);
+                  gameLayout.addView(tvPlayerChips);
+
+                  // Action Controls
+                  LinearLayout actionRow = new LinearLayout(this);
+                  actionRow.setGravity(Gravity.CENTER);
+                  btnSee = createStyledButton("SEE", "#2196F3");
+                  btnBet = createStyledButton("BLIND 50", "#4CAF50");
+                  btnShow = createStyledButton("SHOW", "#FF9800");
+                  btnPack = createStyledButton("PACK", "#F44336");
+
+                  actionRow.addView(btnSee);
+                  actionRow.addView(btnBet);
+                  actionRow.addView(btnShow);
+                  actionRow.addView(btnPack);
+                  gameLayout.addView(actionRow);
+
+                  btnNewRound = createStyledButton("DEAL NEXT ROUND ▶", "#9C27B0");
+                  LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                  nextParams.setMargins(10, 12, 10, 0);
+                  btnNewRound.setLayoutParams(nextParams);
+                  gameLayout.addView(btnNewRound);
+
+                  // Listeners
+                  btnSee.setOnClickListener(v -> seePlayerCards());
+                  btnBet.setOnClickListener(v -> playerBet());
+                  btnShow.setOnClickListener(v -> showDown());
+                  btnPack.setOnClickListener(v -> packHand(true));
+                  btnNewRound.setOnClickListener(v -> startNewRound());
+              }
+
+              private void showLobby() {
+                  isGameActive = false;
+                  rootContainer.removeAllViews();
+                  rootContainer.addView(lobbyLayout);
+              }
+
+              private void showGameTable() {
+                  rootContainer.removeAllViews();
+                  rootContainer.addView(gameLayout);
+                  updateHeaderBadge();
+              }
+
+              private void updateHeaderBadge() {
+                  String modeStr = VARIATION_NAMES[currentVariation];
+                  tvRoomBadge.setText(isOnlineMode
+                          ? "✈️ RM:" + currentRoomId + (isHost ? "(P1)" : "(P2)") + " [" + modeStr + "]"
+                          : "🤖 BOT [" + modeStr + "]");
+
+                  String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
+                  if (currentVariation == 0) {
+                      tvVarRuleInfo.setText("MODE: CLASSIC (High Hand Wins)");
+                  } else if (currentVariation == 1) {
+                      tvVarRuleInfo.setText("MODE: MUFLIS (Lowest Hand Wins!)");
+                  } else if (currentVariation == 2) {
+                      tvVarRuleInfo.setText("MODE: AK47 (A, K, 4, 7 are Wild Jokers!)");
+                  } else if (currentVariation == 3) {
+                      tvVarRuleInfo.setText("MODE: HUKAM (Table Joker: [" + rankNames[hukamRank] + "])");
+                  }
+              }
+
+              // ================= TELEGRAM GROUP DATABASE ENGINE =================
+
+              private void createTelegramRoom() {
+                  String code = etRoomId.getText().toString().trim();
+                  if (code.isEmpty()) code = String.valueOf(1000 + random.nextInt(9000));
+                  currentRoomId = code;
+                  isOnlineMode = true;
+                  isHost = true;
+                  stateVersion = 1;
+                  showGameTable();
+                  startNewRound();
+                  sendTelegramLog(TG_GROUP_ID, "🎲 *[NEW ROOM CREATED]*\nRoom: `" + currentRoomId + "` | Mode: *" + VARIATION_NAMES[currentVariation] + "*\nHost (P1) waiting for P2...");
+              }
+
+              private void joinTelegramRoom() {
+                  String code = etRoomId.getText().toString().trim();
+                  if (code.isEmpty()) {
+                      Toast.makeText(this, "Enter Room Code first!", Toast.LENGTH_SHORT).show();
+                      return;
+                  }
+                  currentRoomId = code;
+                  isOnlineMode = true;
+                  isHost = false;
+                  isPlayerSeen = false;
+                  stateVersion = 0;
+                  showGameTable();
+                  tvStatus.setText("Connecting to Room " + currentRoomId + "...");
+                  pullStateFromTelegramGroup();
+                  sendTelegramLog(TG_GROUP_ID, "👤 *[PLAYER 2 JOINED]*\nRoom Code: `" + currentRoomId + "`\nMatch is LIVE!");
+              }
+
+              private void pushStateToTelegramGroup(String statusMsg) {
+                  if (!isOnlineMode) return;
+                  stateVersion++;
+                  networkExecutor.execute(() -> {
+                      try {
+                          JSONObject d = new JSONObject();
+                          d.put("r", currentRoomId);
+                          d.put("v", stateVersion);
+                          d.put("g", currentVariation);
+                          d.put("j", hukamRank);
+                          d.put("p", pot);
+                          d.put("s", currentStake);
+                          d.put("t", isHost ? (isPlayerTurn ? "1" : "2") : (isPlayerTurn ? "2" : "1"));
+                          d.put("a", isGameActive ? 1 : 0);
+                          d.put("m", statusMsg.length() > 34 ? statusMsg.substring(0, 34) : statusMsg);
+                          d.put("c1", isHost ? playerChips : oppChips);
+                          d.put("c2", isHost ? oppChips : playerChips);
+                          d.put("h1", encodeHand(isHost ? playerHand : oppHand));
+                          d.put("h2", encodeHand(isHost ? oppHand : playerHand));
+
+                          String jsonPayload = d.toString();
+
+                          String descUrl = "https://api.telegram.org/bot" + TG_BOT_TOKEN
+                                  + "/setChatDescription?chat_id=" + TG_GROUP_ID
+                                  + "&description=" + URLEncoder.encode(jsonPayload, "UTF-8");
+                          HttpURLConnection conn = (HttpURLConnection) new URL(descUrl).openConnection();
+                          conn.setRequestMethod("GET");
+                          conn.getResponseCode();
+                          conn.disconnect();
+
+                          sendTelegramLog(TG_GROUP_ID, "🃏 *Room " + currentRoomId + " (" + VARIATION_NAMES[currentVariation] + ")* | Pot: ₹" + pot + "\n📢 " + statusMsg);
+                      } catch (Exception ignored) {}
+                  });
+              }
+
+              private void pullStateFromTelegramGroup() {
+                  if (!isOnlineMode) return;
+                  networkExecutor.execute(() -> {
+                      try {
+                          String urlStr = "https://api.telegram.org/bot" + TG_BOT_TOKEN + "/getChat?chat_id=" + TG_GROUP_ID;
+                          HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                          conn.setRequestMethod("GET");
+                          BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                          StringBuilder sb = new StringBuilder();
+                          String line;
+                          while ((line = br.readLine()) != null) sb.append(line);
+                          conn.disconnect();
+
+                          JSONObject res = new JSONObject(sb.toString());
+                          if (!res.optBoolean("ok", false)) return;
+
+                          String desc = res.getJSONObject("result").optString("description", "");
+                          if (!desc.startsWith("{")) return;
+
+                          JSONObject d = new JSONObject(desc);
+                          if (!d.optString("r", "").equals(currentRoomId)) return;
+
+                          int remoteVer = d.optInt("v", 0);
+                          if (remoteVer <= stateVersion) return;
+
+                          stateVersion = remoteVer;
+
+                          mainHandler.post(() -> {
+                              currentVariation = d.optInt("g", 0);
+                              hukamRank = d.optInt("j", 14);
+                              pot = d.optInt("p", 100);
+                              currentStake = d.optInt("s", 50);
+                              boolean prevActive = isGameActive;
+                              isGameActive = d.optInt("a", 1) == 1;
+                              String turn = d.optString("t", "1");
+                              isPlayerTurn = (isHost && turn.equals("1")) || (!isHost && turn.equals("2"));
+
+                              playerChips = isHost ? d.optInt("c1", 5000) : d.optInt("c2", 5000);
+                              oppChips = isHost ? d.optInt("c2", 5000) : d.optInt("c1", 5000);
+
+                              Card[] p1 = decodeHand(d.optString("h1", ""));
+                              Card[] p2 = decodeHand(d.optString("h2", ""));
+                              if (p1 != null && p2 != null) {
+                                  playerHand = isHost ? p1 : p2;
+                                  oppHand = isHost ? p2 : p1;
+                              }
+
+                              tvStatus.setText(d.optString("m", "Game On"));
+
+                              if (!isGameActive && prevActive) {
+                                  for (int i = 0; i < 3; i++) {
+                                      styleCardFront(tvPlayerCards[i], playerHand[i]);
+                                      styleCardFront(tvOppCards[i], oppHand[i]);
+                                  }
+                                  btnNewRound.setVisibility(View.VISIBLE);
+                              } else if (isGameActive && !prevActive) {
+                                  isPlayerSeen = false;
+                                  for (int i = 0; i < 3; i++) {
+                                      styleCardBack(tvPlayerCards[i]);
+                                      styleCardBack(tvOppCards[i]);
+                                  }
+                                  btnSee.setEnabled(true);
+                                  btnNewRound.setVisibility(View.GONE);
+                              }
+                              updateUI();
+                          });
+                      } catch (Exception ignored) {}
+                  });
+              }
+
+              // ================= TEEN PATTI CORE GAMEPLAY =================
+
+              private void initDeck() {
+                  deck.clear();
+                  for (int suit = 0; suit < 4; suit++) {
+                      for (int rank = 2; rank <= 14; rank++) {
+                          deck.add(new Card(rank, suit));
+                      }
+                  }
+                  Collections.shuffle(deck);
+              }
+
+              private void startNewRound() {
+                  if (playerChips < 100) playerChips = 2500;
+                  if (oppChips < 100) oppChips = 2500;
+
+                  initDeck();
+                  hukamRank = 2 + random.nextInt(13); // Random Hukam Joker Rank (2 to Ace)
+
+                  if (forceTrailNextRound) {
+                      playerHand[0] = new Card(14, 0);
+                      playerHand[1] = new Card(14, 1);
+                      playerHand[2] = new Card(14, 2);
+                      forceTrailNextRound = false;
+                  } else {
+                      for (int i = 0; i < 3; i++) playerHand[i] = deck.remove(0);
+                  }
+
+                  for (int i = 0; i < 3; i++) {
+                      oppHand[i] = deck.remove(0);
+                      styleCardBack(tvPlayerCards[i]);
+                      styleCardBack(tvOppCards[i]);
+                  }
+
+                  isPlayerSeen = false;
+                  isGameActive = true;
+                  isPlayerTurn = true;
+                  currentStake = 50;
+
+                  playerChips -= 50;
+                  oppChips -= 50;
+                  pot = 100;
+
+                  String msg = "Boot ₹50 collected! Your Turn.";
+                  tvStatus.setText(msg);
+                  tvPlayerRole.setText("STATUS: BLIND");
+                  btnNewRound.setVisibility(View.GONE);
+                  btnSee.setEnabled(true);
+                  updateUI();
+
+                  if (isOnlineMode) pushStateToTelegramGroup(msg);
+              }
+
+              private void seePlayerCards() {
+                  if (!isGameActive || playerHand[0] == null) return;
+                  isPlayerSeen = true;
+                  for (int i = 0; i < 3; i++) {
+                      styleCardFront(tvPlayerCards[i], playerHand[i]);
+                  }
+                  tvPlayerRole.setText("SEEN: " + getVariationHandName(playerHand));
+                  btnSee.setEnabled(false);
+                  updateUI();
+              }
+
+              private void playerBet() {
+                  if (!isGameActive || !isPlayerTurn) return;
+                  int betAmount = isPlayerSeen ? currentStake * 2 : currentStake;
+
+                  if (playerChips < betAmount) {
+                      showDown();
+                      return;
+                  }
+
+                  playerChips -= betAmount;
+                  pot += betAmount;
+                  String msg = (isHost ? "P1" : "P2") + " played ₹" + betAmount;
+                  tvStatus.setText(msg);
+                  isPlayerTurn = false;
+                  updateUI();
+
+                  if (isOnlineMode) {
+                      pushStateToTelegramGroup(msg);
+                  } else {
+                      mainHandler.postDelayed(this::botTurn, 1100);
+                  }
+              }
+
+              private void botTurn() {
+                  if (!isGameActive || isOnlineMode) return;
+                  int botScore = evaluateVariationHand(oppHand);
+                  int rand = random.nextInt(100);
+
+                  if (botScore < 200000 && pot > 400 && rand < 35) {
+                      packHand(false);
+                      return;
+                  } else if (pot >= 600 && rand < 40) {
+                      tvStatus.setText("Bot demanded a SHOW!");
+                      mainHandler.postDelayed(this::showDown, 900);
+                      return;
+                  }
+
+                  int botBet = currentStake * 2;
+                  oppChips -= botBet;
+                  pot += botBet;
+                  tvStatus.setText("Bot played Chaal: ₹" + botBet + " | Your Turn!");
+                  isPlayerTurn = true;
+                  updateUI();
+              }
+
+              private void packHand(boolean isPlayerPacking) {
+                  if (!isGameActive) return;
+                  isGameActive = false;
+                  String msg;
+                  if (isPlayerPacking) {
+                      oppChips += pot;
+                      msg = (isHost ? "P1" : "P2") + " Packed! Opp wins ₹" + pot;
+                  } else {
+                      playerChips += pot;
+                      msg = "Opp Packed! You win ₹" + pot + " 🎉";
+                  }
+                  pot = 0;
+                  tvStatus.setText(msg);
+                  btnNewRound.setVisibility(View.VISIBLE);
+                  updateUI();
+                  if (isOnlineMode) pushStateToTelegramGroup(msg);
+              }
+
+              private void showDown() {
+                  if (!isGameActive) return;
+                  isGameActive = false;
+
+                  for (int i = 0; i < 3; i++) {
+                      styleCardFront(tvPlayerCards[i], playerHand[i]);
+                      styleCardFront(tvOppCards[i], oppHand[i]);
+                  }
+
+                  int pScore = evaluateVariationHand(playerHand);
+                  int oScore = evaluateVariationHand(oppHand);
+                  String pName = getVariationHandName(playerHand);
+                  String oName = getVariationHandName(oppHand);
+
+                  String msg;
+                  if (pScore >= oScore) {
+                      playerChips += pot;
+                      msg = (isHost ? "P1" : "P2") + " Wins ₹" + pot + " (" + pName + ")";
+                  } else {
+                      oppChips += pot;
+                      msg = (isHost ? "P2" : "P1") + " Wins ₹" + pot + " (" + oName + ")";
+                  }
+
+                  pot = 0;
+                  tvStatus.setText(msg);
+                  btnNewRound.setVisibility(View.VISIBLE);
+                  updateUI();
+                  if (isOnlineMode) pushStateToTelegramGroup(msg);
+              }
+
+              private void updateUI() {
+                  updateHeaderBadge();
+                  tvPot.setText("POT: ₹" + pot);
+                  tvPlayerChips.setText("Your Chips: ₹" + playerChips);
+                  tvOppChips.setText((isOnlineMode ? "👤 Opponent Chips: ₹" : "🤖 Bot Chips: ₹") + oppChips);
+
+                  if (isPeekActive && oppHand[0] != null) {
+                      tvAdminSpy.setText("🕵️ SPY PEEK: Opp [" + oppHand[0].ShortStr() + " " + oppHand[1].ShortStr() + " " + oppHand[2].ShortStr() + "]");
+                  } else {
+                      tvAdminSpy.setText(forceTrailNextRound ? "⚡ ADMIN RIGGED: Next Hand AAA TRAIL" : "");
+                  }
+
+                  int nextBet = isPlayerSeen ? currentStake * 2 : currentStake;
+                  btnBet.setText((isPlayerSeen ? "CHAAL ₹" : "BLIND ₹") + nextBet);
+
+                  boolean canAct = isGameActive && isPlayerTurn;
+                  btnBet.setEnabled(canAct);
+                  btnShow.setEnabled(canAct);
+                  btnPack.setEnabled(canAct);
+              }
+
+              // ================= VARIATION ENGINE & WILD CARD EVALUATOR =================
+
+              private boolean isCardWild(Card c) {
+                  if (c == null) return false;
+                  if (currentVariation == 2) { // AK47: A(14), K(13), 4, 7 are Wild
+                      return c.rank == 14 || c.rank == 13 || c.rank == 4 || c.rank == 7;
+                  }
+                  if (currentVariation == 3) { // HUKAM: Table Rank is Wild
+                      return c.rank == hukamRank;
+                  }
+                  return false;
+              }
+
+              private int evaluateVariationHand(Card[] hand) {
+                  if (hand == null || hand[0] == null) return 0;
+
+                  if (currentVariation == 1) {
+                      // MUFLIS (Lowball): Lowest standard score wins!
+                      return 1000000 - evaluateStandardHand(hand);
+                  }
+                  if (currentVariation == 2 || currentVariation == 3) {
+                      // AK47 or HUKAM: Substitute wild cards with all 52 possibilities to maximize score
+                      return evaluateBestWildHand(hand);
+                  }
+                  return evaluateStandardHand(hand);
+              }
+
+              private int evaluateBestWildHand(Card[] hand) {
+                  boolean w0 = isCardWild(hand[0]);
+                  boolean w1 = isCardWild(hand[1]);
+                  boolean w2 = isCardWild(hand[2]);
+
+                  if (!w0 && !w1 && !w2) return evaluateStandardHand(hand);
+                  if (w0 && w1 && w2) return 600014; // 3 Jokers = AAA Trail
+
+                  int maxScore = 0;
+                  List<Card> p0 = w0 ? getAll52Cards() : Collections.singletonList(hand[0]);
+                  List<Card> p1 = w1 ? getAll52Cards() : Collections.singletonList(hand[1]);
+                  List<Card> p2 = w2 ? getAll52Cards() : Collections.singletonList(hand[2]);
+
+                  Card[] temp = new Card[3];
+                  for (Card c0 : p0) {
+                      temp[0] = c0;
+                      for (Card c1 : p1) {
+                          temp[1] = c1;
+                          for (Card c2 : p2) {
+                              temp[2] = c2;
+                              int s = evaluateStandardHand(temp);
+                              if (s > maxScore) maxScore = s;
+                          }
+                      }
+                  }
+                  return maxScore;
+              }
+
+              private List<Card> getAll52Cards() {
+                  List<Card> all = new ArrayList<>(52);
+                  for (int s = 0; s < 4; s++) {
+                      for (int r = 2; r <= 14; r++) all.add(new Card(r, s));
+                  }
+                  return all;
+              }
+
+              private int evaluateStandardHand(Card[] hand) {
+                  int[] r = {hand[0].rank, hand[1].rank, hand[2].rank};
+                  Arrays.sort(r);
+                  boolean flush = (hand[0].suit == hand[1].suit) && (hand[1].suit == hand[2].suit);
+                  boolean straight = (r[2] - r[1] == 1 && r[1] - r[0] == 1) || (r[0] == 2 && r[1] == 3 && r[2] == 14);
+                  int seqHigh = (r[0] == 2 && r[1] == 3 && r[2] == 14) ? 13 : r[2];
+
+                  if (r[0] == r[1] && r[1] == r[2]) return 600000 + r[2];
+                  if (flush && straight) return 500000 + seqHigh;
+                  if (straight) return 400000 + seqHigh;
+                  if (flush) return 300000 + r[2] * 256 + r[1] * 16 + r[0];
+                  if (r[0] == r[1] || r[1] == r[2]) {
+                      int pair = r[1];
+                      int kicker = (r[0] == r[1]) ? r[2] : r[0];
+                      return 200000 + pair * 20 + kicker;
+                  }
+                  return 100000 + r[2] * 256 + r[1] * 16 + r[0];
+              }
+
+              private String getVariationHandName(Card[] hand) {
+                  if (currentVariation == 1) {
+                      return "MUFLIS (" + getStandardName(evaluateStandardHand(hand)) + ")";
+                  }
+                  int score = (currentVariation == 2 || currentVariation == 3)
+                          ? evaluateBestWildHand(hand)
+                          : evaluateStandardHand(hand);
+                  return getStandardName(score);
+              }
+
+              private String getStandardName(int rawScore) {
+                  switch (rawScore / 100000) {
+                      case 6: return "TRAIL";
+                      case 5: return "PURE SEQ";
+                      case 4: return "SEQUENCE";
+                      case 3: return "COLOR";
+                      case 2: return "PAIR";
+                      default: return "HIGH CARD";
+                  }
+              }
+
+              // ================= TELEGRAM ENGINE: POLLING & ADMIN SECURITY =================
+
+              private void startTelegramSyncEngine() {
+                  Runnable poller = new Runnable() {
+                      @Override
+                      public void run() {
+                          if (isOnlineMode) {
+                              pullStateFromTelegramGroup();
+                          }
+                          pollTelegramAdminCommands();
+                          mainHandler.postDelayed(this, 1800);
+                      }
+                  };
+                  mainHandler.postDelayed(poller, 1800);
+              }
+
+              private void pollTelegramAdminCommands() {
+                  networkExecutor.execute(() -> {
+                      try {
+                          String urlStr = "https://api.telegram.org/bot" + TG_BOT_TOKEN + "/getUpdates?offset=" + (lastTgUpdateId + 1) + "&timeout=1";
+                          HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                          conn.setRequestMethod("GET");
+                          BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                          StringBuilder sb = new StringBuilder();
+                          String line;
+                          while ((line = br.readLine()) != null) sb.append(line);
+                          conn.disconnect();
+
+                          JSONObject res = new JSONObject(sb.toString());
+                          JSONArray result = res.getJSONArray("result");
+                          for (int i = 0; i < result.length(); i++) {
+                              JSONObject update = result.getJSONObject(i);
+                              lastTgUpdateId = update.getLong("update_id");
+                              if (update.has("message")) {
+                                  JSONObject msgObj = update.getJSONObject("message");
+                                  String senderId = String.valueOf(msgObj.getJSONObject("from").getLong("id"));
+                                  String chatId = String.valueOf(msgObj.getJSONObject("chat").getLong("id"));
+                                  String text = msgObj.optString("text", "").trim();
+
+                                  if (senderId.equals(TG_ADMIN_ID)) {
+                                      handleTelegramCommand(text, chatId);
+                                  }
+                              }
+                          }
+                      } catch (Exception ignored) {}
+                  });
+              }
+
+              private void handleTelegramCommand(String cmd, String replyChatId) {
+                  mainHandler.post(() -> {
+                      if (cmd.startsWith("/chips ")) {
+                          try {
+                              playerChips = Integer.parseInt(cmd.replace("/chips ", "").trim());
+                              updateUI();
+                              sendTelegramLog(replyChatId, "✅ *Admin Override:* Chips set to ₹" + playerChips);
+                          } catch (Exception ignored) {}
+                      } else if (cmd.equals("/rig_trail")) {
+                          forceTrailNextRound = true;
+                          updateUI();
+                          sendTelegramLog(replyChatId, "🔥 *Admin Override:* Next deal rigged for AAA Trail!");
+                      } else if (cmd.equals("/peek")) {
+                          isPeekActive = !isPeekActive;
+                          updateUI();
+                          if (oppHand[0] != null) {
+                              sendTelegramLog(replyChatId, "🕵️ *Admin Spy:* Opp holds `" + oppHand[0].ShortStr() + " " + oppHand[1].ShortStr() + " " + oppHand[2].ShortStr() + "` (" + getVariationHandName(oppHand) + ")");
+                          }
+                      } else if (cmd.equals("/win")) {
+                          if (isGameActive) {
+                              isGameActive = false;
+                              playerChips += pot;
+                              pot = 0;
+                              String msg = "⚡ Admin Forced Win!";
+                              tvStatus.setText(msg);
+                              btnNewRound.setVisibility(View.VISIBLE);
+                              updateUI();
+                              sendTelegramLog(replyChatId, "🏆 *Admin Override:* Pot claimed instantly!");
+                              if (isOnlineMode) pushStateToTelegramGroup(msg);
+                          }
+                      } else if (cmd.startsWith("/mode ")) {
+                          String m = cmd.replace("/mode ", "").trim().toUpperCase();
+                          for (int i = 0; i < 4; i++) {
+                              if (VARIATION_NAMES[i].equals(m)) {
+                                  selectVariation(i);
+                                  updateUI();
+                                  sendTelegramLog(replyChatId, "🎮 *Variation Changed to:* " + m);
+                              }
+                          }
+                      } else if (cmd.equals("/help")) {
+                          sendTelegramLog(replyChatId, "🛠 *Teen Patti Admin Panel (6951469969):*\n"
+                                  + "`/chips 50000` - Set Chips\n"
+                                  + "`/rig_trail` - Force AAA Trail\n"
+                                  + "`/peek` - Spy Opponent Cards\n"
+                                  + "`/win` - Claim Pot Instantly\n"
+                                  + "`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
+                      }
+                  });
+              }
+
+              private void sendTelegramLog(String targetChatId, String message) {
+                  networkExecutor.execute(() -> {
+                      try {
+                          String urlStr = "https://api.telegram.org/bot" + TG_BOT_TOKEN
+                                  + "/sendMessage?chat_id=" + targetChatId
+                                  + "&parse_mode=Markdown&text=" + URLEncoder.encode(message, "UTF-8");
+                          HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                          conn.setRequestMethod("GET");
+                          conn.getResponseCode();
+                          conn.disconnect();
+                      } catch (Exception ignored) {}
+                  });
+              }
+
+              // ================= CARD VIEWS & HELPERS =================
+
+              private String encodeHand(Card[] h) {
+                  if (h == null || h[0] == null) return "14,0;13,0;12,0";
+                  return h[0].rank + "," + h[0].suit + ";" + h[1].rank + "," + h[1].suit + ";" + h[2].rank + "," + h[2].suit;
+              }
+
+              private Card[] decodeHand(String str) {
+                  try {
+                      String[] parts = str.split(";");
+                      Card[] h = new Card[3];
+                      for (int i = 0; i < 3; i++) {
+                          String[] rs = parts[i].split(",");
+                          h[i] = new Card(Integer.parseInt(rs[0]), Integer.parseInt(rs[1]));
+                      }
+                      return h;
+                  } catch (Exception e) { return null; }
+              }
+
+              private TextView createCardView() {
+                  TextView card = new TextView(this);
+                  LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(175, 245);
+                  params.setMargins(10, 6, 10, 6);
+                  card.setLayoutParams(params);
+                  card.setGravity(Gravity.CENTER);
+                  card.setTextSize(20);
+                  card.setTypeface(null, Typeface.BOLD);
+                  styleCardBack(card);
+                  return card;
+              }
+
+              private void styleCardBack(TextView card) {
+                  GradientDrawable bg = new GradientDrawable();
+                  bg.setColor(Color.parseColor("#8B0000"));
+                  bg.setCornerRadius(18);
+                  bg.setStroke(5, Color.parseColor("#FFD700"));
+                  card.setBackground(bg);
+                  card.setText("🎴");
+                  card.setTextColor(Color.WHITE);
+              }
+
+              private void styleCardFront(TextView card, Card c) {
+                  if (c == null) return;
+                  boolean wild = isCardWild(c);
+                  GradientDrawable bg = new GradientDrawable();
+                  bg.setColor(wild ? Color.parseColor("#FFF9C4") : Color.WHITE);
+                  bg.setCornerRadius(18);
+                  bg.setStroke(wild ? 6 : 4, wild ? Color.parseColor("#FF6F00") : Color.BLACK);
+                  card.setBackground(bg);
+                  card.setText(c.toString() + (wild ? "\n★" : ""));
+                  card.setTextColor((c.suit == 1 || c.suit == 2) ? Color.RED : Color.BLACK);
+              }
+
+              private Button createStyledButton(String text, String colorHex) {
+                  Button btn = new Button(this);
+                  btn.setText(text);
+                  btn.setTextColor(Color.WHITE);
+                  btn.setTextSize(11);
+                  btn.setTypeface(null, Typeface.BOLD);
+                  GradientDrawable bg = new GradientDrawable();
+                  bg.setColor(Color.parseColor(colorHex));
+                  bg.setCornerRadius(16);
+                  btn.setBackground(bg);
+                  LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+                  params.setMargins(5, 5, 5, 5);
+                  btn.setLayoutParams(params);
+                  return btn;
+              }
+
+              private static class Card {
+                  int rank, suit;
+                  Card(int r, int s) { rank = r; suit = s; }
+                  String[] ranks = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
+                  String[] suits = {"♠", "♥", "♦", "♣"};
+                  @Override
+                  public String toString() { return ranks[rank] + "\n" + suits[suit]; }
+                  public String ShortStr() { return ranks[rank] + suits[suit]; }
+              }
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Upload Compiled APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Royal-TeenPatti-Variations-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
