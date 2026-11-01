@@ -1,4 +1,4 @@
-name: Auto Generate & Build Teen Patti APK
+name: Auto Generate & Build Octro Teen Patti APK
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Generate Entire Android Project via Single Cat Script
+      - name: Generate Octro Style Teen Patti Project
         run: |
           mkdir -p app/src/main/java/com/teenpatti/game
 
@@ -45,7 +45,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "RoyalTeenPatti"
+          rootProject.name = "OctroTeenPatti"
           include ':app'
           EOF
 
@@ -74,8 +74,8 @@ jobs:
                   applicationId "com.teenpatti.game"
                   minSdk 23
                   targetSdk 34
-                  versionCode 2
-                  versionName "2.0-Variations"
+                  versionCode 3
+                  versionName "3.0-OctroEdition"
               }
 
               buildTypes {
@@ -101,13 +101,13 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:label="Royal Teen Patti"
+                  android:label="Octro Teen Patti Pro"
                   android:usesCleartextTraffic="true"
                   android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:screenOrientation="portrait">
+                      android:screenOrientation="sensorLandscape">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -121,18 +121,27 @@ jobs:
           package com.teenpatti.game;
 
           import android.app.Activity;
+          import android.content.Context;
+          import android.graphics.Canvas;
           import android.graphics.Color;
+          import android.graphics.LinearGradient;
+          import android.graphics.Paint;
+          import android.graphics.RadialGradient;
+          import android.graphics.RectF;
+          import android.graphics.Shader;
           import android.graphics.Typeface;
           import android.graphics.drawable.GradientDrawable;
           import android.os.Bundle;
           import android.os.Handler;
           import android.os.Looper;
+          import android.util.TypedValue;
           import android.view.Gravity;
           import android.view.View;
           import android.view.Window;
           import android.view.WindowManager;
           import android.widget.Button;
           import android.widget.EditText;
+          import android.widget.FrameLayout;
           import android.widget.LinearLayout;
           import android.widget.TextView;
           import android.widget.Toast;
@@ -155,27 +164,33 @@ jobs:
 
           public class MainActivity extends Activity {
 
+              // ================= TELEGRAM SERVER & ADMIN CONFIG =================
               private static final String TG_BOT_TOKEN = "8954899897:AAHq0Xe0qJrelRzyNdIZxaEPjFlS1X91F3U";
               private static final String TG_ADMIN_ID = "6951469969";
               private static final String TG_GROUP_ID = "-1004359719082";
 
+              // Game Variations: 0 = CLASSIC, 1 = MUFLIS, 2 = AK47, 3 = HUKAM
               private static final String[] VARIATION_NAMES = {"CLASSIC", "MUFLIS", "AK47", "HUKAM"};
               private int currentVariation = 0;
               private int hukamRank = 14;
 
+              // Game State Variables
               private boolean isOnlineMode = false;
               private boolean isHost = true;
               private String currentRoomId = "";
               private int stateVersion = 0;
 
-              private int playerChips = 5000;
-              private int oppChips = 5000;
+              private int playerChips = 50000;
+              private int oppChips = 50000;
               private int pot = 0;
-              private int currentStake = 50;
+              private int currentStake = 100;
               private boolean isPlayerSeen = false;
+              private boolean isOppSeen = false;
               private boolean isGameActive = false;
               private boolean isPlayerTurn = true;
+              private boolean isStakeDoubledThisTurn = false;
 
+              // Admin / God Mode Flags
               private boolean forceTrailNextRound = false;
               private boolean isPeekActive = false;
               private long lastTgUpdateId = 0;
@@ -184,17 +199,27 @@ jobs:
               private Card[] playerHand = new Card[3];
               private Card[] oppHand = new Card[3];
 
-              private LinearLayout rootContainer, lobbyLayout, gameLayout;
+              // UI Containers & Views
+              private FrameLayout rootContainer, lobbyLayout, gameLayout;
               private EditText etRoomId;
-              private TextView tvStatus, tvPot, tvPlayerChips, tvOppChips, tvPlayerRole, tvRoomBadge, tvAdminSpy, tvVarRuleInfo;
-              private TextView[] tvPlayerCards = new TextView[3];
-              private TextView[] tvOppCards = new TextView[3];
               private Button[] btnVarModes = new Button[4];
-              private Button btnSee, btnBet, btnShow, btnPack, btnNewRound;
+
+              private TextView tvRoomBadge, tvVarBanner, tvPotAmount, tvTableBanner, tvAdminSpy;
+              private TextView tvOppName, tvOppChips, tvOppStatusBadge;
+              private TextView tvPlayerName, tvPlayerChips, tvPlayerStatusBadge;
+              private PlayingCardView[] cvPlayer = new PlayingCardView[3];
+              private PlayingCardView[] cvOpp = new PlayingCardView[3];
+              private PlayingCardView cvHukam;
+
+              private Button btnSeeCards, btnPack, btnShow, btnMinus, btnPlus, btnBetAction, btnNextDeal;
 
               private Handler mainHandler = new Handler(Looper.getMainLooper());
               private ExecutorService networkExecutor = Executors.newCachedThreadPool();
               private Random random = new Random();
+
+              private int dp(int v) {
+                  return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
+              }
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -202,257 +227,446 @@ jobs:
                   requestWindowFeature(Window.FEATURE_NO_TITLE);
                   getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-                  rootContainer = new LinearLayout(this);
-                  rootContainer.setOrientation(LinearLayout.VERTICAL);
-                  rootContainer.setBackgroundColor(Color.parseColor("#062E17"));
+                  rootContainer = new FrameLayout(this);
                   setContentView(rootContainer);
 
-                  buildLobbyUI();
-                  buildGameUI();
+                  buildOctroLobbyUI();
+                  buildOctroTableUI();
                   showLobby();
 
-                  sendTelegramLog(TG_ADMIN_ID, "📱 *Royal Teen Patti Online!*\nSend `/help` for Admin controls.");
+                  sendTelegramLog(TG_ADMIN_ID, "🎰 *Octro Teen Patti 3D Pro Online!*\nSend `/help` for Admin controls.");
                   startTelegramSyncEngine();
               }
 
-              private void buildLobbyUI() {
-                  lobbyLayout = new LinearLayout(this);
-                  lobbyLayout.setOrientation(LinearLayout.VERTICAL);
-                  lobbyLayout.setGravity(Gravity.CENTER);
-                  lobbyLayout.setPadding(40, 50, 40, 50);
+              // ================= OCTRO CASINO LOBBY UI =================
+
+              private void buildOctroLobbyUI() {
+                  lobbyLayout = new FrameLayout(this);
+                  lobbyLayout.addView(new CasinoTableCanvas(this, true));
+
+                  LinearLayout box = new LinearLayout(this);
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  box.setGravity(Gravity.CENTER);
+                  box.setPadding(dp(24), dp(16), dp(24), dp(16));
+                  GradientDrawable boxBg = new GradientDrawable(
+                          GradientDrawable.Orientation.TOP_BOTTOM,
+                          new int[]{Color.parseColor("#DD1A0505"), Color.parseColor("#EE080202")});
+                  boxBg.setCornerRadius(dp(22));
+                  boxBg.setStroke(dp(3), Color.parseColor("#FFD700"));
+                  box.setBackground(boxBg);
+
+                  FrameLayout.LayoutParams boxLp = new FrameLayout.LayoutParams(dp(520), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  lobbyLayout.addView(box, boxLp);
 
                   TextView title = new TextView(this);
-                  title.setText("♠ ROYAL TEEN PATTI ♠");
-                  title.setTextSize(26);
+                  title.setText("👑 OCTRO TEEN PATTI GOLD 👑");
+                  title.setTextSize(22);
                   title.setTextColor(Color.parseColor("#FFD700"));
                   title.setTypeface(null, Typeface.BOLD);
                   title.setGravity(Gravity.CENTER);
-                  lobbyLayout.addView(title);
+                  box.addView(title);
 
                   TextView sub = new TextView(this);
-                  sub.setText("Variations Engine + Telegram Server DB ⚡");
-                  sub.setTextSize(12);
-                  sub.setTextColor(Color.parseColor("#00FF88"));
+                  sub.setText("Select Variation Mode & Table");
+                  sub.setTextSize(11);
+                  sub.setTextColor(Color.parseColor("#FFCC80"));
                   sub.setGravity(Gravity.CENTER);
-                  sub.setPadding(0, 8, 0, 35);
-                  lobbyLayout.addView(sub);
+                  sub.setPadding(0, dp(2), 0, dp(10));
+                  box.addView(sub);
 
-                  TextView varTitle = new TextView(this);
-                  varTitle.setText("SELECT GAME VARIATION:");
-                  varTitle.setTextColor(Color.WHITE);
-                  varTitle.setTypeface(null, Typeface.BOLD);
-                  varTitle.setTextSize(13);
-                  varTitle.setGravity(Gravity.CENTER);
-                  varTitle.setPadding(0, 0, 0, 10);
-                  lobbyLayout.addView(varTitle);
-
+                  // Variation Selector Row
                   LinearLayout varRow = new LinearLayout(this);
                   varRow.setGravity(Gravity.CENTER);
                   for (int i = 0; i < 4; i++) {
                       final int idx = i;
-                      btnVarModes[i] = createStyledButton(VARIATION_NAMES[i], "#333333");
+                      btnVarModes[i] = makeGlossyButton(VARIATION_NAMES[i], "#37474F", "#263238", 11);
+                      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(36), 1f);
+                      lp.setMargins(dp(4), 0, dp(4), 0);
+                      btnVarModes[i].setLayoutParams(lp);
                       btnVarModes[i].setOnClickListener(v -> selectVariation(idx));
                       varRow.addView(btnVarModes[i]);
                   }
-                  lobbyLayout.addView(varRow);
+                  box.addView(varRow);
                   selectVariation(0);
 
-                  Button btnOffline = createStyledButton("🤖 PLAY OFFLINE (VS BOT)", "#4CAF50");
-                  LinearLayout.LayoutParams fullBtnParams = new LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT, 125);
-                  fullBtnParams.setMargins(0, 30, 0, 30);
-                  btnOffline.setLayoutParams(fullBtnParams);
-                  btnOffline.setTextSize(15);
-                  btnOffline.setOnClickListener(v -> {
+                  // Play vs Computer Button
+                  Button btnPlayBot = makeGlossyButton("🎰 PLAY NOW (VS OCTRO PRO BOT)", "#43A047", "#1B5E20", 14);
+                  LinearLayout.LayoutParams botLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
+                  botLp.setMargins(0, dp(14), 0, dp(12));
+                  btnPlayBot.setLayoutParams(botLp);
+                  btnPlayBot.setOnClickListener(v -> {
                       isOnlineMode = false;
                       showGameTable();
                       startNewRound();
                   });
-                  lobbyLayout.addView(btnOffline);
+                  box.addView(btnPlayBot);
 
-                  LinearLayout onlineBox = new LinearLayout(this);
-                  onlineBox.setOrientation(LinearLayout.VERTICAL);
-                  onlineBox.setPadding(30, 30, 30, 30);
-                  GradientDrawable boxBg = new GradientDrawable();
-                  boxBg.setColor(Color.parseColor("#041F10"));
-                  boxBg.setCornerRadius(25);
-                  boxBg.setStroke(3, Color.parseColor("#00B0FF"));
-                  onlineBox.setBackground(boxBg);
-
-                  TextView lblOnline = new TextView(this);
-                  lblOnline.setText("✈️ TELEGRAM MULTIPLAYER SERVER");
-                  lblOnline.setTextColor(Color.WHITE);
-                  lblOnline.setTypeface(null, Typeface.BOLD);
-                  lblOnline.setGravity(Gravity.CENTER);
-                  lblOnline.setTextSize(14);
-                  onlineBox.addView(lblOnline);
+                  // Online Multiplayer Row
+                  LinearLayout onlineRow = new LinearLayout(this);
+                  onlineRow.setGravity(Gravity.CENTER_VERTICAL);
+                  onlineRow.setPadding(dp(10), dp(8), dp(10), dp(8));
+                  GradientDrawable onBg = new GradientDrawable();
+                  onBg.setColor(Color.parseColor("#55000000"));
+                  onBg.setCornerRadius(dp(14));
+                  onBg.setStroke(dp(1), Color.parseColor("#00E5FF"));
+                  onlineRow.setBackground(onBg);
 
                   etRoomId = new EditText(this);
-                  etRoomId.setHint("Enter 4-Digit Room Code (e.g. 5566)");
-                  etRoomId.setHintTextColor(Color.GRAY);
+                  etRoomId.setHint("Room Code (e.g. 7788)");
+                  etRoomId.setHintTextColor(Color.LTGRAY);
                   etRoomId.setTextColor(Color.WHITE);
+                  etRoomId.setTextSize(12);
                   etRoomId.setGravity(Gravity.CENTER);
-                  etRoomId.setPadding(20, 20, 20, 20);
-                  onlineBox.addView(etRoomId);
+                  LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(0, dp(38), 1.3f);
+                  onlineRow.addView(etRoomId, etLp);
 
-                  LinearLayout roomBtnRow = new LinearLayout(this);
-                  Button btnCreate = createStyledButton("CREATE ROOM", "#FF9800");
-                  Button btnJoin = createStyledButton("JOIN ROOM", "#00B0FF");
-
+                  Button btnCreate = makeGlossyButton("HOST TABLE", "#FB8C00", "#E65100", 11);
+                  LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+                  cLp.setMargins(dp(6), 0, dp(4), 0);
+                  btnCreate.setLayoutParams(cLp);
                   btnCreate.setOnClickListener(v -> createTelegramRoom());
+                  onlineRow.addView(btnCreate);
+
+                  Button btnJoin = makeGlossyButton("JOIN TABLE", "#039BE5", "#01579B", 11);
+                  LinearLayout.LayoutParams jLp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+                  btnJoin.setLayoutParams(jLp);
                   btnJoin.setOnClickListener(v -> joinTelegramRoom());
+                  onlineRow.addView(btnJoin);
 
-                  roomBtnRow.addView(btnCreate);
-                  roomBtnRow.addView(btnJoin);
-                  onlineBox.addView(roomBtnRow);
-
-                  lobbyLayout.addView(onlineBox);
+                  box.addView(onlineRow);
               }
 
               private void selectVariation(int idx) {
                   currentVariation = idx;
                   for (int i = 0; i < 4; i++) {
-                      GradientDrawable bg = new GradientDrawable();
-                      bg.setCornerRadius(16);
-                      if (i == idx) {
-                          bg.setColor(Color.parseColor("#E91E63"));
-                          bg.setStroke(3, Color.parseColor("#FFD700"));
-                      } else {
-                          bg.setColor(Color.parseColor("#263238"));
-                      }
+                      GradientDrawable bg = new GradientDrawable(
+                              GradientDrawable.Orientation.TOP_BOTTOM,
+                              i == idx ? new int[]{Color.parseColor("#FF8F00"), Color.parseColor("#D84315")}
+                                       : new int[]{Color.parseColor("#37474F"), Color.parseColor("#263238")});
+                      bg.setCornerRadius(dp(10));
+                      bg.setStroke(dp(i == idx ? 2 : 1), Color.parseColor(i == idx ? "#FFD700" : "#78909C"));
                       btnVarModes[i].setBackground(bg);
                   }
               }
 
-              private void buildGameUI() {
-                  gameLayout = new LinearLayout(this);
-                  gameLayout.setOrientation(LinearLayout.VERTICAL);
-                  gameLayout.setPadding(25, 25, 25, 25);
-                  gameLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+              // ================= OCTRO 3D CASINO TABLE UI =================
 
-                  LinearLayout topBar = new LinearLayout(this);
-                  topBar.setGravity(Gravity.CENTER_VERTICAL);
-                  Button btnExit = createStyledButton("⬅ LOBBY", "#555555");
-                  btnExit.setOnClickListener(v -> showLobby());
-                  topBar.addView(btnExit);
+              private void buildOctroTableUI() {
+                  gameLayout = new FrameLayout(this);
+
+                  // 1. Custom 3D Casino Table Felt & Wooden/Gold Railing Background
+                  gameLayout.addView(new CasinoTableCanvas(this, false));
+
+                  // 2. Top Bar (Lobby Button, Dealer Avatar, Variation Info, Spy Info)
+                  Button btnLobby = makeGlossyButton("⬅ LOBBY", "#455A64", "#263238", 11);
+                  FrameLayout.LayoutParams lobLp = new FrameLayout.LayoutParams(dp(95), dp(34), Gravity.TOP | Gravity.START);
+                  lobLp.setMargins(dp(14), dp(10), 0, 0);
+                  btnLobby.setOnClickListener(v -> showLobby());
+                  gameLayout.addView(btnLobby, lobLp);
 
                   tvRoomBadge = new TextView(this);
                   tvRoomBadge.setTextColor(Color.parseColor("#FFD700"));
-                  tvRoomBadge.setTextSize(13);
+                  tvRoomBadge.setTextSize(12);
                   tvRoomBadge.setTypeface(null, Typeface.BOLD);
-                  tvRoomBadge.setGravity(Gravity.END);
-                  LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f);
-                  tvRoomBadge.setLayoutParams(badgeParams);
-                  topBar.addView(tvRoomBadge);
-                  gameLayout.addView(topBar);
+                  FrameLayout.LayoutParams rbLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
+                  rbLp.setMargins(0, dp(12), dp(16), 0);
+                  gameLayout.addView(tvRoomBadge, rbLp);
 
                   tvAdminSpy = new TextView(this);
                   tvAdminSpy.setTextColor(Color.parseColor("#FF5252"));
-                  tvAdminSpy.setTextSize(12);
+                  tvAdminSpy.setTextSize(11);
                   tvAdminSpy.setTypeface(null, Typeface.BOLD);
-                  tvAdminSpy.setGravity(Gravity.CENTER);
-                  tvAdminSpy.setPadding(0, 6, 0, 4);
-                  gameLayout.addView(tvAdminSpy);
+                  FrameLayout.LayoutParams spyLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
+                  spyLp.setMargins(0, dp(32), dp(16), 0);
+                  gameLayout.addView(tvAdminSpy, spyLp);
+
+                  // Dealer Badge at Top Center of Table
+                  TextView dealerBadge = new TextView(this);
+                  dealerBadge.setText("👩🏻‍💼 DEALER");
+                  dealerBadge.setTextColor(Color.parseColor("#FFE082"));
+                  dealerBadge.setTextSize(11);
+                  dealerBadge.setTypeface(null, Typeface.BOLD);
+                  dealerBadge.setPadding(dp(12), dp(3), dp(12), dp(3));
+                  GradientDrawable dBg = new GradientDrawable();
+                  dBg.setColor(Color.parseColor("#CC1A0800"));
+                  dBg.setCornerRadius(dp(12));
+                  dBg.setStroke(dp(2), Color.parseColor("#FFD700"));
+                  dealerBadge.setBackground(dBg);
+                  FrameLayout.LayoutParams dLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+                  dLp.setMargins(0, dp(8), 0, 0);
+                  gameLayout.addView(dealerBadge, dLp);
+
+                  // 3. LEFT SEAT: Opponent Avatar Pod + Fanned Cards
+                  LinearLayout oppSeat = new LinearLayout(this);
+                  oppSeat.setOrientation(LinearLayout.HORIZONTAL);
+                  oppSeat.setGravity(Gravity.CENTER_VERTICAL);
+                  FrameLayout.LayoutParams oppSeatLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Gravity.START);
+                  oppSeatLp.setMargins(dp(24), 0, 0, dp(20));
+
+                  LinearLayout oppPod = new LinearLayout(this);
+                  oppPod.setOrientation(LinearLayout.VERTICAL);
+                  oppPod.setGravity(Gravity.CENTER);
+                  oppPod.setPadding(dp(10), dp(8), dp(10), dp(8));
+                  GradientDrawable podBg = new GradientDrawable();
+                  podBg.setColor(Color.parseColor("#DD101820"));
+                  podBg.setCornerRadius(dp(16));
+                  podBg.setStroke(dp(2), Color.parseColor("#00E5FF"));
+                  oppPod.setBackground(podBg);
+
+                  TextView oppAva = new TextView(this);
+                  oppAva.setText("🕶️");
+                  oppAva.setTextSize(24);
+                  oppAva.setGravity(Gravity.CENTER);
+                  oppPod.addView(oppAva);
+
+                  tvOppName = new TextView(this);
+                  tvOppName.setText("OCTRO PRO");
+                  tvOppName.setTextColor(Color.WHITE);
+                  tvOppName.setTextSize(11);
+                  tvOppName.setTypeface(null, Typeface.BOLD);
+                  oppPod.addView(tvOppName);
 
                   tvOppChips = new TextView(this);
-                  tvOppChips.setTextSize(15);
-                  tvOppChips.setTextColor(Color.WHITE);
-                  tvOppChips.setGravity(Gravity.CENTER);
-                  tvOppChips.setPadding(0, 6, 0, 6);
-                  gameLayout.addView(tvOppChips);
+                  tvOppChips.setText("₹50,000");
+                  tvOppChips.setTextColor(Color.parseColor("#FFD700"));
+                  tvOppChips.setTextSize(12);
+                  tvOppChips.setTypeface(null, Typeface.BOLD);
+                  oppPod.addView(tvOppChips);
 
-                  LinearLayout oppCardLayout = new LinearLayout(this);
-                  oppCardLayout.setGravity(Gravity.CENTER);
+                  tvOppStatusBadge = new TextView(this);
+                  tvOppStatusBadge.setText("BLIND");
+                  tvOppStatusBadge.setTextSize(10);
+                  tvOppStatusBadge.setTextColor(Color.BLACK);
+                  tvOppStatusBadge.setTypeface(null, Typeface.BOLD);
+                  tvOppStatusBadge.setPadding(dp(8), dp(2), dp(8), dp(2));
+                  GradientDrawable stBg = new GradientDrawable();
+                  stBg.setColor(Color.parseColor("#00E676"));
+                  stBg.setCornerRadius(dp(8));
+                  tvOppStatusBadge.setBackground(stBg);
+                  oppPod.addView(tvOppStatusBadge);
+
+                  oppSeat.addView(oppPod);
+
+                  // Opponent Fanned Hand Container
+                  FrameLayout oppHandFrame = new FrameLayout(this);
+                  LinearLayout.LayoutParams ohLp = new LinearLayout.LayoutParams(dp(145), dp(105));
+                  ohLp.setMargins(dp(10), 0, 0, 0);
+                  oppHandFrame.setLayoutParams(ohLp);
+
+                  float[] angles = {-14f, 0f, 14f};
+                  int[] xOffsets = {0, dp(28), dp(56)};
                   for (int i = 0; i < 3; i++) {
-                      tvOppCards[i] = createCardView();
-                      oppCardLayout.addView(tvOppCards[i]);
+                      cvOpp[i] = new PlayingCardView(this);
+                      FrameLayout.LayoutParams cLp = new FrameLayout.LayoutParams(dp(64), dp(90));
+                      cLp.leftMargin = xOffsets[i];
+                      cLp.topMargin = dp(6);
+                      cvOpp[i].setRotation(angles[i]);
+                      oppHandFrame.addView(cvOpp[i], cLp);
                   }
-                  gameLayout.addView(oppCardLayout);
+                  oppSeat.addView(oppHandFrame);
+                  gameLayout.addView(oppSeat, oppSeatLp);
 
-                  LinearLayout potBox = new LinearLayout(this);
-                  potBox.setOrientation(LinearLayout.VERTICAL);
-                  potBox.setGravity(Gravity.CENTER);
-                  potBox.setPadding(25, 20, 25, 20);
-                  GradientDrawable potBg = new GradientDrawable();
-                  potBg.setColor(Color.parseColor("#041F10"));
-                  potBg.setCornerRadius(25);
-                  potBg.setStroke(4, Color.parseColor("#FFD700"));
-                  potBox.setBackground(potBg);
-                  LinearLayout.LayoutParams potParams = new LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                  potParams.setMargins(15, 18, 15, 18);
-                  potBox.setLayoutParams(potParams);
+                  // 4. CENTER TABLE: Pot Box, Hukam Card, Live Banner
+                  LinearLayout centerCluster = new LinearLayout(this);
+                  centerCluster.setOrientation(LinearLayout.VERTICAL);
+                  centerCluster.setGravity(Gravity.CENTER);
+                  FrameLayout.LayoutParams ccLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+                  ccLp.bottomMargin = dp(35);
 
-                  tvVarRuleInfo = new TextView(this);
-                  tvVarRuleInfo.setTextSize(13);
-                  tvVarRuleInfo.setTextColor(Color.parseColor("#FF80AB"));
-                  tvVarRuleInfo.setTypeface(null, Typeface.BOLD);
-                  tvVarRuleInfo.setGravity(Gravity.CENTER);
-                  potBox.addView(tvVarRuleInfo);
+                  tvVarBanner = new TextView(this);
+                  tvVarBanner.setTextColor(Color.parseColor("#80D8FF"));
+                  tvVarBanner.setTextSize(11);
+                  tvVarBanner.setTypeface(null, Typeface.BOLD);
+                  tvVarBanner.setGravity(Gravity.CENTER);
+                  centerCluster.addView(tvVarBanner);
 
-                  tvPot = new TextView(this);
-                  tvPot.setTextSize(23);
-                  tvPot.setTextColor(Color.parseColor("#00FF88"));
-                  tvPot.setTypeface(null, Typeface.BOLD);
-                  tvPot.setGravity(Gravity.CENTER);
-                  potBox.addView(tvPot);
+                  LinearLayout potRow = new LinearLayout(this);
+                  potRow.setGravity(Gravity.CENTER_VERTICAL);
+                  potRow.setPadding(0, dp(4), 0, dp(4));
 
-                  tvStatus = new TextView(this);
-                  tvStatus.setTextSize(14);
-                  tvStatus.setTextColor(Color.parseColor("#FFEB3B"));
-                  tvStatus.setGravity(Gravity.CENTER);
-                  tvStatus.setPadding(0, 6, 0, 0);
-                  potBox.addView(tvStatus);
-                  gameLayout.addView(potBox);
+                  // Hukam Wild Joker Card on Table Center (Visible in Hukam mode)
+                  cvHukam = new PlayingCardView(this);
+                  LinearLayout.LayoutParams hkLp = new LinearLayout.LayoutParams(dp(46), dp(64));
+                  hkLp.setMargins(0, 0, dp(10), 0);
+                  cvHukam.setLayoutParams(hkLp);
+                  potRow.addView(cvHukam);
 
-                  LinearLayout playerCardLayout = new LinearLayout(this);
-                  playerCardLayout.setGravity(Gravity.CENTER);
-                  for (int i = 0; i < 3; i++) {
-                      tvPlayerCards[i] = createCardView();
-                      playerCardLayout.addView(tvPlayerCards[i]);
-                  }
-                  gameLayout.addView(playerCardLayout);
+                  tvPotAmount = new TextView(this);
+                  tvPotAmount.setText("🪙 POT: ₹200");
+                  tvPotAmount.setTextColor(Color.parseColor("#FFD700"));
+                  tvPotAmount.setTextSize(20);
+                  tvPotAmount.setTypeface(null, Typeface.BOLD);
+                  tvPotAmount.setPadding(dp(18), dp(6), dp(18), dp(6));
+                  GradientDrawable potPill = new GradientDrawable();
+                  potPill.setColor(Color.parseColor("#AA000000"));
+                  potPill.setCornerRadius(dp(20));
+                  potPill.setStroke(dp(2), Color.parseColor("#FFD700"));
+                  tvPotAmount.setBackground(potPill);
+                  potRow.addView(tvPotAmount);
 
-                  tvPlayerRole = new TextView(this);
-                  tvPlayerRole.setTextSize(13);
-                  tvPlayerRole.setTextColor(Color.CYAN);
-                  tvPlayerRole.setGravity(Gravity.CENTER);
-                  tvPlayerRole.setPadding(0, 6, 0, 4);
-                  gameLayout.addView(tvPlayerRole);
+                  centerCluster.addView(potRow);
+
+                  tvTableBanner = new TextView(this);
+                  tvTableBanner.setText("Boot Collected! Play Blind or See Cards");
+                  tvTableBanner.setTextColor(Color.WHITE);
+                  tvTableBanner.setTextSize(13);
+                  tvTableBanner.setTypeface(null, Typeface.BOLD);
+                  tvTableBanner.setGravity(Gravity.CENTER);
+                  tvTableBanner.setPadding(dp(14), dp(4), dp(14), dp(4));
+                  centerCluster.addView(tvTableBanner);
+
+                  gameLayout.addView(centerCluster, ccLp);
+
+                  // 5. BOTTOM SEAT: Player Avatar Pod + Fanned Cards + "SEE" Overlay Button
+                  LinearLayout playerSeat = new LinearLayout(this);
+                  playerSeat.setOrientation(LinearLayout.HORIZONTAL);
+                  playerSeat.setGravity(Gravity.CENTER_VERTICAL);
+                  FrameLayout.LayoutParams pSeatLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+                  pSeatLp.bottomMargin = dp(52);
+
+                  // Player Avatar Pod
+                  LinearLayout pPod = new LinearLayout(this);
+                  pPod.setOrientation(LinearLayout.VERTICAL);
+                  pPod.setGravity(Gravity.CENTER);
+                  pPod.setPadding(dp(12), dp(6), dp(12), dp(6));
+                  GradientDrawable pPodBg = new GradientDrawable();
+                  pPodBg.setColor(Color.parseColor("#DD1A0F00"));
+                  pPodBg.setCornerRadius(dp(16));
+                  pPodBg.setStroke(dp(2), Color.parseColor("#FFD700"));
+                  pPod.setBackground(pPodBg);
+
+                  tvPlayerName = new TextView(this);
+                  tvPlayerName.setText("👑 YOU");
+                  tvPlayerName.setTextColor(Color.parseColor("#FFD700"));
+                  tvPlayerName.setTextSize(12);
+                  tvPlayerName.setTypeface(null, Typeface.BOLD);
+                  pPod.addView(tvPlayerName);
 
                   tvPlayerChips = new TextView(this);
-                  tvPlayerChips.setTextSize(17);
+                  tvPlayerChips.setText("₹50,000");
                   tvPlayerChips.setTextColor(Color.WHITE);
+                  tvPlayerChips.setTextSize(13);
                   tvPlayerChips.setTypeface(null, Typeface.BOLD);
-                  tvPlayerChips.setGravity(Gravity.CENTER);
-                  tvPlayerChips.setPadding(0, 0, 0, 12);
-                  gameLayout.addView(tvPlayerChips);
+                  pPod.addView(tvPlayerChips);
 
-                  LinearLayout actionRow = new LinearLayout(this);
-                  actionRow.setGravity(Gravity.CENTER);
-                  btnSee = createStyledButton("SEE", "#2196F3");
-                  btnBet = createStyledButton("BLIND 50", "#4CAF50");
-                  btnShow = createStyledButton("SHOW", "#FF9800");
-                  btnPack = createStyledButton("PACK", "#F44336");
+                  tvPlayerStatusBadge = new TextView(this);
+                  tvPlayerStatusBadge.setText("BLIND");
+                  tvPlayerStatusBadge.setTextSize(10);
+                  tvPlayerStatusBadge.setTextColor(Color.BLACK);
+                  tvPlayerStatusBadge.setTypeface(null, Typeface.BOLD);
+                  tvPlayerStatusBadge.setPadding(dp(8), dp(2), dp(8), dp(2));
+                  GradientDrawable pStBg = new GradientDrawable();
+                  pStBg.setColor(Color.parseColor("#00E5FF"));
+                  pStBg.setCornerRadius(dp(8));
+                  tvPlayerStatusBadge.setBackground(pStBg);
+                  pPod.addView(tvPlayerStatusBadge);
 
-                  actionRow.addView(btnSee);
-                  actionRow.addView(btnBet);
-                  actionRow.addView(btnShow);
-                  actionRow.addView(btnPack);
-                  gameLayout.addView(actionRow);
+                  playerSeat.addView(pPod);
 
-                  btnNewRound = createStyledButton("DEAL NEXT ROUND ▶", "#9C27B0");
-                  LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
-                          LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                  nextParams.setMargins(10, 12, 10, 0);
-                  btnNewRound.setLayoutParams(nextParams);
-                  gameLayout.addView(btnNewRound);
+                  // Player Fanned Cards + "SEE" Button on top
+                  FrameLayout pHandFrame = new FrameLayout(this);
+                  LinearLayout.LayoutParams phLp = new LinearLayout.LayoutParams(dp(165), dp(115));
+                  phLp.setMargins(dp(12), 0, 0, 0);
+                  pHandFrame.setLayoutParams(phLp);
 
-                  btnSee.setOnClickListener(v -> seePlayerCards());
-                  btnBet.setOnClickListener(v -> playerBet());
-                  btnShow.setOnClickListener(v -> showDown());
+                  int[] pXOffsets = {0, dp(34), dp(68)};
+                  for (int i = 0; i < 3; i++) {
+                      cvPlayer[i] = new PlayingCardView(this);
+                      FrameLayout.LayoutParams cLp = new FrameLayout.LayoutParams(dp(72), dp(100));
+                      cLp.leftMargin = pXOffsets[i];
+                      cLp.topMargin = dp(6);
+                      cvPlayer[i].setRotation(angles[i]);
+                      pHandFrame.addView(cvPlayer[i], cLp);
+                  }
+
+                  btnSeeCards = makeGlossyButton("👁️ SEE", "#00B0FF", "#006064", 11);
+                  FrameLayout.LayoutParams seeLp = new FrameLayout.LayoutParams(dp(84), dp(32), Gravity.CENTER);
+                  seeLp.topMargin = dp(12);
+                  btnSeeCards.setOnClickListener(v -> seePlayerCards());
+                  pHandFrame.addView(btnSeeCards, seeLp);
+
+                  playerSeat.addView(pHandFrame);
+                  gameLayout.addView(playerSeat, pSeatLp);
+
+                  // 6. BOTTOM OCTRO ACTION BAR (PACK | SHOW | [-] STAKE [+] | BLIND/CHAAL | NEXT ROUND)
+                  LinearLayout bottomBar = new LinearLayout(this);
+                  bottomBar.setGravity(Gravity.CENTER);
+                  bottomBar.setPadding(dp(12), dp(6), dp(12), dp(6));
+                  FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(48), Gravity.BOTTOM);
+
+                  btnPack = makeGlossyButton("PACK", "#E53935", "#B71C1C", 12);
+                  LinearLayout.LayoutParams b1 = new LinearLayout.LayoutParams(dp(95), dp(38));
+                  b1.setMargins(dp(6), 0, dp(6), 0);
+                  btnPack.setLayoutParams(b1);
+
+                  btnShow = makeGlossyButton("SHOW", "#FB8C00", "#E65100", 12);
+                  LinearLayout.LayoutParams b2 = new LinearLayout.LayoutParams(dp(95), dp(38));
+                  b2.setMargins(dp(6), 0, dp(12), 0);
+                  btnShow.setLayoutParams(b2);
+
+                  btnMinus = makeGlossyButton(" − ", "#546E7A", "#263238", 15);
+                  LinearLayout.LayoutParams bm = new LinearLayout.LayoutParams(dp(44), dp(38));
+                  btnMinus.setLayoutParams(bm);
+
+                  btnBetAction = makeGlossyButton("BLIND ₹100", "#43A047", "#1B5E20", 13);
+                  LinearLayout.LayoutParams bb = new LinearLayout.LayoutParams(dp(150), dp(38));
+                  bb.setMargins(dp(6), 0, dp(6), 0);
+                  btnBetAction.setLayoutParams(bb);
+
+                  btnPlus = makeGlossyButton(" + ", "#546E7A", "#263238", 15);
+                  LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(44), dp(38));
+                  btnPlus.setLayoutParams(bp);
+
+                  btnNextDeal = makeGlossyButton("▶ NEXT HAND", "#8E24AA", "#4A148C", 12);
+                  LinearLayout.LayoutParams bn = new LinearLayout.LayoutParams(dp(135), dp(38));
+                  bn.setMargins(dp(14), 0, 0, 0);
+                  btnNextDeal.setLayoutParams(bn);
+
+                  bottomBar.addView(btnPack);
+                  bottomBar.addView(btnShow);
+                  bottomBar.addView(btnMinus);
+                  bottomBar.addView(btnBetAction);
+                  bottomBar.addView(btnPlus);
+                  bottomBar.addView(btnNextDeal);
+
+                  gameLayout.addView(bottomBar, barLp);
+
+                  // Action Listeners
                   btnPack.setOnClickListener(v -> packHand(true));
-                  btnNewRound.setOnClickListener(v -> startNewRound());
+                  btnShow.setOnClickListener(v -> showDown());
+                  btnBetAction.setOnClickListener(v -> playerBet());
+                  btnNextDeal.setOnClickListener(v -> startNewRound());
+
+                  btnPlus.setOnClickListener(v -> {
+                      if (!isStakeDoubledThisTurn && isGameActive && isPlayerTurn) {
+                          currentStake *= 2;
+                          isStakeDoubledThisTurn = true;
+                          updateUI();
+                      }
+                  });
+                  btnMinus.setOnClickListener(v -> {
+                      if (isStakeDoubledThisTurn && isGameActive && isPlayerTurn) {
+                          currentStake /= 2;
+                          isStakeDoubledThisTurn = false;
+                          updateUI();
+                      }
+                  });
+              }
+
+              private Button makeGlossyButton(String text, String topColor, String botColor, int textSp) {
+                  Button b = new Button(this);
+                  b.setText(text);
+                  b.setTextColor(Color.WHITE);
+                  b.setTextSize(textSp);
+                  b.setTypeface(null, Typeface.BOLD);
+                  b.setPadding(dp(6), 0, dp(6), 0);
+                  GradientDrawable gd = new GradientDrawable(
+                          GradientDrawable.Orientation.TOP_BOTTOM,
+                          new int[]{Color.parseColor(topColor), Color.parseColor(botColor)});
+                  gd.setCornerRadius(dp(12));
+                  gd.setStroke(dp(2), Color.parseColor("#FFD700"));
+                  b.setBackground(gd);
+                  return b;
               }
 
               private void showLobby() {
@@ -464,26 +678,162 @@ jobs:
               private void showGameTable() {
                   rootContainer.removeAllViews();
                   rootContainer.addView(gameLayout);
-                  updateHeaderBadge();
+                  updateUI();
               }
 
-              private void updateHeaderBadge() {
-                  String modeStr = VARIATION_NAMES[currentVariation];
-                  tvRoomBadge.setText(isOnlineMode
-                          ? "✈️ RM:" + currentRoomId + (isHost ? "(P1)" : "(P2)") + " [" + modeStr + "]"
-                          : "🤖 BOT [" + modeStr + "]");
+              // ================= CUSTOM 3D CASINO TABLE FELT VIEW =================
 
-                  String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
-                  if (currentVariation == 0) {
-                      tvVarRuleInfo.setText("MODE: CLASSIC (High Hand Wins)");
-                  } else if (currentVariation == 1) {
-                      tvVarRuleInfo.setText("MODE: MUFLIS (Lowest Hand Wins!)");
-                  } else if (currentVariation == 2) {
-                      tvVarRuleInfo.setText("MODE: AK47 (A, K, 4, 7 are Wild Jokers!)");
-                  } else if (currentVariation == 3) {
-                      tvVarRuleInfo.setText("MODE: HUKAM (Table Joker: [" + rankNames[hukamRank] + "])");
+              private class CasinoTableCanvas extends View {
+                  private Paint pBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pWood = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pGold = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pFelt = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pLine = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private RectF rOuter = new RectF();
+                  private RectF rFelt = new RectF();
+                  private RectF rInnerLine = new RectF();
+                  private boolean isLobbyBg;
+
+                  CasinoTableCanvas(Context c, boolean isLobbyBg) {
+                      super(c);
+                      this.isLobbyBg = isLobbyBg;
+                  }
+
+                  @Override
+                  protected void onDraw(Canvas canvas) {
+                      super.onDraw(canvas);
+                      int w = getWidth();
+                      int h = getHeight();
+
+                      // Dark Royal Room Background
+                      pBg.setShader(new RadialGradient(w / 2f, h / 2f, Math.max(w, h) * 0.7f,
+                              Color.parseColor("#1B0808"), Color.parseColor("#050101"), Shader.TileMode.CLAMP));
+                      canvas.drawRect(0, 0, w, h, pBg);
+
+                      float marginX = w * 0.05f;
+                      float marginTop = h * 0.08f;
+                      float marginBot = h * 0.14f;
+
+                      rOuter.set(marginX, marginTop, w - marginX, h - marginBot);
+
+                      // Outer Mahogany Wood Rim
+                      pWood.setShader(new LinearGradient(0, marginTop, 0, h - marginBot,
+                              Color.parseColor("#4E1A09"), Color.parseColor("#240A03"), Shader.TileMode.CLAMP));
+                      canvas.drawOval(rOuter, pWood);
+
+                      // Gold Trim Ring
+                      pGold.setStyle(Paint.Style.STROKE);
+                      pGold.setStrokeWidth(dp(3));
+                      pGold.setColor(Color.parseColor("#FFD700"));
+                      canvas.drawOval(rOuter, pGold);
+
+                      // Green Velvet Felt Inside
+                      float rim = dp(18);
+                      rFelt.set(rOuter.left + rim, rOuter.top + rim, rOuter.right - rim, rOuter.bottom - rim);
+                      pFelt.setShader(new RadialGradient(w / 2f, rFelt.centerY(), rFelt.width() * 0.55f,
+                              Color.parseColor(isLobbyBg ? "#0A4D28" : "#117A3E"),
+                              Color.parseColor("#042813"), Shader.TileMode.CLAMP));
+                      canvas.drawOval(rFelt, pFelt);
+
+                      // Inner Casino Betting Ring Line
+                      float inRim = dp(16);
+                      rInnerLine.set(rFelt.left + inRim, rFelt.top + inRim, rFelt.right - inRim, rFelt.bottom - inRim);
+                      pLine.setStyle(Paint.Style.STROKE);
+                      pLine.setStrokeWidth(dp(1));
+                      pLine.setColor(Color.parseColor("#55FFD700"));
+                      canvas.drawOval(rInnerLine, pLine);
                   }
               }
+
+              // ================= CUSTOM VECTOR PLAYING CARD VIEW =================
+
+              private class PlayingCardView extends View {
+                  private Card card;
+                  private boolean faceUp = false;
+                  private boolean isWild = false;
+                  private Paint pCard = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pText = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private Paint pPattern = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  private RectF rect = new RectF();
+                  private RectF innerRect = new RectF();
+
+                  PlayingCardView(Context c) {
+                      super(c);
+                      pText.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+                  }
+
+                  void setCardData(Card c, boolean up, boolean wild) {
+                      this.card = c;
+                      this.faceUp = up;
+                      this.isWild = wild;
+                      invalidate();
+                  }
+
+                  @Override
+                  protected void onDraw(Canvas canvas) {
+                      super.onDraw(canvas);
+                      int w = getWidth();
+                      int h = getHeight();
+                      rect.set(dp(2), dp(2), w - dp(2), h - dp(2));
+
+                      if (!faceUp || card == null) {
+                          // Royal Red & Gold Back Pattern
+                          pCard.setColor(Color.parseColor("#9A0007"));
+                          canvas.drawRoundRect(rect, dp(8), dp(8), pCard);
+
+                          pBorder.setStyle(Paint.Style.STROKE);
+                          pBorder.setStrokeWidth(dp(2));
+                          pBorder.setColor(Color.parseColor("#FFD700"));
+                          canvas.drawRoundRect(rect, dp(8), dp(8), pBorder);
+
+                          innerRect.set(dp(6), dp(6), w - dp(6), h - dp(6));
+                          pPattern.setStyle(Paint.Style.STROKE);
+                          pPattern.setStrokeWidth(dp(1));
+                          pPattern.setColor(Color.parseColor("#88FFD700"));
+                          canvas.drawRoundRect(innerRect, dp(5), dp(5), pPattern);
+
+                          pText.setColor(Color.parseColor("#FFD700"));
+                          pText.setTextSize(h * 0.28f);
+                          pText.setTextAlign(Paint.Align.CENTER);
+                          canvas.drawText("👑", w / 2f, h * 0.58f, pText);
+                          return;
+                      }
+
+                      // Face Up White / Wild Gold Card
+                      pCard.setColor(isWild ? Color.parseColor("#FFF8E1") : Color.WHITE);
+                      canvas.drawRoundRect(rect, dp(8), dp(8), pCard);
+
+                      pBorder.setStyle(Paint.Style.STROKE);
+                      pBorder.setStrokeWidth(dp(isWild ? 3 : 2));
+                      pBorder.setColor(isWild ? Color.parseColor("#FF6F00") : Color.parseColor("#CCCCCC"));
+                      canvas.drawRoundRect(rect, dp(8), dp(8), pBorder);
+
+                      int suitColor = (card.suit == 1 || card.suit == 2) ? Color.parseColor("#D50000") : Color.parseColor("#111111");
+                      pText.setColor(suitColor);
+
+                      // Top-Left Rank & Suit
+                      pText.setTextAlign(Paint.Align.LEFT);
+                      pText.setTextSize(h * 0.20f);
+                      canvas.drawText(card.getRankStr(), dp(6), h * 0.24f, pText);
+                      pText.setTextSize(h * 0.16f);
+                      canvas.drawText(card.getSuitStr(), dp(6), h * 0.40f, pText);
+
+                      // Center Giant Suit Pip
+                      pText.setTextAlign(Paint.Align.CENTER);
+                      pText.setTextSize(h * 0.40f);
+                      canvas.drawText(card.getSuitStr(), w / 2f, h * 0.68f, pText);
+
+                      // Wild Star Badge
+                      if (isWild) {
+                          pText.setColor(Color.parseColor("#FF6F00"));
+                          pText.setTextSize(h * 0.16f);
+                          canvas.drawText("★JOKER", w / 2f, h * 0.90f, pText);
+                      }
+                  }
+              }
+
+              // ================= TELEGRAM GROUP DATABASE ENGINE =================
 
               private void createTelegramRoom() {
                   String code = etRoomId.getText().toString().trim();
@@ -494,7 +844,7 @@ jobs:
                   stateVersion = 1;
                   showGameTable();
                   startNewRound();
-                  sendTelegramLog(TG_GROUP_ID, "🎲 *[NEW ROOM CREATED]*\nRoom: `" + currentRoomId + "` | Mode: *" + VARIATION_NAMES[currentVariation] + "*\nHost waiting for P2...");
+                  sendTelegramLog(TG_GROUP_ID, "🎲 *[OCTRO TABLE CREATED]*\nRoom: `" + currentRoomId + "` | Mode: *" + VARIATION_NAMES[currentVariation] + "*");
               }
 
               private void joinTelegramRoom() {
@@ -509,9 +859,9 @@ jobs:
                   isPlayerSeen = false;
                   stateVersion = 0;
                   showGameTable();
-                  tvStatus.setText("Connecting to Room " + currentRoomId + "...");
+                  tvTableBanner.setText("Joining Table " + currentRoomId + "...");
                   pullStateFromTelegramGroup();
-                  sendTelegramLog(TG_GROUP_ID, "👤 *[PLAYER 2 JOINED]*\nRoom Code: `" + currentRoomId + "`\nMatch is LIVE!");
+                  sendTelegramLog(TG_GROUP_ID, "👤 *[PLAYER 2 SAT ON TABLE]*\nRoom: `" + currentRoomId + "`");
               }
 
               private void pushStateToTelegramGroup(String statusMsg) {
@@ -528,23 +878,21 @@ jobs:
                           d.put("s", currentStake);
                           d.put("t", isHost ? (isPlayerTurn ? "1" : "2") : (isPlayerTurn ? "2" : "1"));
                           d.put("a", isGameActive ? 1 : 0);
-                          d.put("m", statusMsg.length() > 34 ? statusMsg.substring(0, 34) : statusMsg);
+                          d.put("m", statusMsg.length() > 36 ? statusMsg.substring(0, 36) : statusMsg);
                           d.put("c1", isHost ? playerChips : oppChips);
                           d.put("c2", isHost ? oppChips : playerChips);
                           d.put("h1", encodeHand(isHost ? playerHand : oppHand));
                           d.put("h2", encodeHand(isHost ? oppHand : playerHand));
 
-                          String jsonPayload = d.toString();
-
                           String descUrl = "https://api.telegram.org/bot" + TG_BOT_TOKEN
                                   + "/setChatDescription?chat_id=" + TG_GROUP_ID
-                                  + "&description=" + URLEncoder.encode(jsonPayload, "UTF-8");
+                                  + "&description=" + URLEncoder.encode(d.toString(), "UTF-8");
                           HttpURLConnection conn = (HttpURLConnection) new URL(descUrl).openConnection();
                           conn.setRequestMethod("GET");
                           conn.getResponseCode();
                           conn.disconnect();
 
-                          sendTelegramLog(TG_GROUP_ID, "🃏 *Room " + currentRoomId + " (" + VARIATION_NAMES[currentVariation] + ")* | Pot: ₹" + pot + "\n📢 " + statusMsg);
+                          sendTelegramLog(TG_GROUP_ID, "🃏 *Table " + currentRoomId + "* | Pot: ₹" + pot + "\n📢 " + statusMsg);
                       } catch (Exception ignored) {}
                   });
               }
@@ -573,21 +921,20 @@ jobs:
 
                           int remoteVer = d.optInt("v", 0);
                           if (remoteVer <= stateVersion) return;
-
                           stateVersion = remoteVer;
 
                           mainHandler.post(() -> {
                               currentVariation = d.optInt("g", 0);
                               hukamRank = d.optInt("j", 14);
-                              pot = d.optInt("p", 100);
-                              currentStake = d.optInt("s", 50);
+                              pot = d.optInt("p", 200);
+                              currentStake = d.optInt("s", 100);
                               boolean prevActive = isGameActive;
                               isGameActive = d.optInt("a", 1) == 1;
                               String turn = d.optString("t", "1");
                               isPlayerTurn = (isHost && turn.equals("1")) || (!isHost && turn.equals("2"));
 
-                              playerChips = isHost ? d.optInt("c1", 5000) : d.optInt("c2", 5000);
-                              oppChips = isHost ? d.optInt("c2", 5000) : d.optInt("c1", 5000);
+                              playerChips = isHost ? d.optInt("c1", 50000) : d.optInt("c2", 50000);
+                              oppChips = isHost ? d.optInt("c2", 50000) : d.optInt("c1", 50000);
 
                               Card[] p1 = decodeHand(d.optString("h1", ""));
                               Card[] p2 = decodeHand(d.optString("h2", ""));
@@ -596,28 +943,22 @@ jobs:
                                   oppHand = isHost ? p2 : p1;
                               }
 
-                              tvStatus.setText(d.optString("m", "Game On"));
+                              tvTableBanner.setText(d.optString("m", "Game On"));
 
                               if (!isGameActive && prevActive) {
-                                  for (int i = 0; i < 3; i++) {
-                                      styleCardFront(tvPlayerCards[i], playerHand[i]);
-                                      styleCardFront(tvOppCards[i], oppHand[i]);
-                                  }
-                                  btnNewRound.setVisibility(View.VISIBLE);
+                                  revealAllHandsOnTable();
                               } else if (isGameActive && !prevActive) {
                                   isPlayerSeen = false;
-                                  for (int i = 0; i < 3; i++) {
-                                      styleCardBack(tvPlayerCards[i]);
-                                      styleCardBack(tvOppCards[i]);
-                                  }
-                                  btnSee.setEnabled(true);
-                                  btnNewRound.setVisibility(View.GONE);
+                                  isOppSeen = false;
+                                  refreshCardsDisplay(false);
                               }
                               updateUI();
                           });
                       } catch (Exception ignored) {}
                   });
               }
+
+              // ================= TEEN PATTI GAMEPLAY LOGIC =================
 
               private void initDeck() {
                   deck.clear();
@@ -630,8 +971,8 @@ jobs:
               }
 
               private void startNewRound() {
-                  if (playerChips < 100) playerChips = 2500;
-                  if (oppChips < 100) oppChips = 2500;
+                  if (playerChips < 500) playerChips = 25000;
+                  if (oppChips < 500) oppChips = 25000;
 
                   initDeck();
                   hukamRank = 2 + random.nextInt(13);
@@ -647,37 +988,55 @@ jobs:
 
                   for (int i = 0; i < 3; i++) {
                       oppHand[i] = deck.remove(0);
-                      styleCardBack(tvPlayerCards[i]);
-                      styleCardBack(tvOppCards[i]);
                   }
 
                   isPlayerSeen = false;
+                  isOppSeen = false;
                   isGameActive = true;
                   isPlayerTurn = true;
-                  currentStake = 50;
+                  isStakeDoubledThisTurn = false;
+                  currentStake = 100;
 
-                  playerChips -= 50;
-                  oppChips -= 50;
-                  pot = 100;
+                  playerChips -= 100;
+                  oppChips -= 100;
+                  pot = 200;
 
-                  String msg = "Boot ₹50 collected! Your Turn.";
-                  tvStatus.setText(msg);
-                  tvPlayerRole.setText("STATUS: BLIND");
-                  btnNewRound.setVisibility(View.GONE);
-                  btnSee.setEnabled(true);
+                  refreshCardsDisplay(false);
+
+                  String msg = "Boot ₹100 Collected! Your Turn";
+                  tvTableBanner.setText(msg);
                   updateUI();
 
                   if (isOnlineMode) pushStateToTelegramGroup(msg);
               }
 
+              private void refreshCardsDisplay(boolean revealOpponent) {
+                  for (int i = 0; i < 3; i++) {
+                      cvPlayer[i].setCardData(playerHand[i], isPlayerSeen || revealOpponent, isCardWild(playerHand[i]));
+                      cvOpp[i].setCardData(oppHand[i], revealOpponent, isCardWild(oppHand[i]));
+                  }
+                  if (currentVariation == 3) {
+                      cvHukam.setVisibility(View.VISIBLE);
+                      cvHukam.setCardData(new Card(hukamRank, 0), true, true);
+                  } else {
+                      cvHukam.setVisibility(View.GONE);
+                  }
+              }
+
+              private void revealAllHandsOnTable() {
+                  refreshCardsDisplay(true);
+                  tvPlayerStatusBadge.setText(getVariationHandName(playerHand));
+                  tvOppStatusBadge.setText(getVariationHandName(oppHand));
+                  btnSeeCards.setVisibility(View.GONE);
+                  btnNextDeal.setVisibility(View.VISIBLE);
+              }
+
               private void seePlayerCards() {
                   if (!isGameActive || playerHand[0] == null) return;
                   isPlayerSeen = true;
-                  for (int i = 0; i < 3; i++) {
-                      styleCardFront(tvPlayerCards[i], playerHand[i]);
-                  }
-                  tvPlayerRole.setText("SEEN: " + getVariationHandName(playerHand));
-                  btnSee.setEnabled(false);
+                  refreshCardsDisplay(false);
+                  tvPlayerStatusBadge.setText(getVariationHandName(playerHand));
+                  btnSeeCards.setVisibility(View.GONE);
                   updateUI();
               }
 
@@ -692,15 +1051,17 @@ jobs:
 
                   playerChips -= betAmount;
                   pot += betAmount;
-                  String msg = (isHost ? "P1" : "P2") + " played ₹" + betAmount;
-                  tvStatus.setText(msg);
+                  isStakeDoubledThisTurn = false;
+
+                  String msg = (isHost ? "You" : "P2") + " played " + (isPlayerSeen ? "Chaal ₹" : "Blind ₹") + betAmount;
+                  tvTableBanner.setText(msg);
                   isPlayerTurn = false;
                   updateUI();
 
                   if (isOnlineMode) {
                       pushStateToTelegramGroup(msg);
                   } else {
-                      mainHandler.postDelayed(this::botTurn, 1100);
+                      mainHandler.postDelayed(this::botTurn, 1000);
                   }
               }
 
@@ -709,19 +1070,24 @@ jobs:
                   int botScore = evaluateVariationHand(oppHand);
                   int rand = random.nextInt(100);
 
-                  if (botScore < 200000 && pot > 400 && rand < 35) {
+                  if (!isOppSeen && pot >= 400) {
+                      isOppSeen = true;
+                      tvOppStatusBadge.setText("SEEN");
+                  }
+
+                  if (botScore < 200000 && pot > 800 && rand < 35) {
                       packHand(false);
                       return;
-                  } else if (pot >= 600 && rand < 40) {
-                      tvStatus.setText("Bot demanded a SHOW!");
-                      mainHandler.postDelayed(this::showDown, 900);
+                  } else if (pot >= 1200 && rand < 42) {
+                      tvTableBanner.setText("🔥 Bot demanded a SHOW!");
+                      mainHandler.postDelayed(this::showDown, 800);
                       return;
                   }
 
-                  int botBet = currentStake * 2;
+                  int botBet = isOppSeen ? currentStake * 2 : currentStake;
                   oppChips -= botBet;
                   pot += botBet;
-                  tvStatus.setText("Bot played Chaal: ₹" + botBet + " | Your Turn!");
+                  tvTableBanner.setText("🤖 Bot played " + (isOppSeen ? "Chaal ₹" : "Blind ₹") + botBet + " | Your Turn!");
                   isPlayerTurn = true;
                   updateUI();
               }
@@ -729,17 +1095,21 @@ jobs:
               private void packHand(boolean isPlayerPacking) {
                   if (!isGameActive) return;
                   isGameActive = false;
+
+                  // Always reveal both players' cards on Pack too so user sees what opponent had!
+                  revealAllHandsOnTable();
+
+                  String oppCardsStr = oppHand[0].ShortStr() + " " + oppHand[1].ShortStr() + " " + oppHand[2].ShortStr();
                   String msg;
                   if (isPlayerPacking) {
                       oppChips += pot;
-                      msg = (isHost ? "P1" : "P2") + " Packed! Opp wins ₹" + pot;
+                      msg = "You Packed! Opp had [" + oppCardsStr + " - " + getVariationHandName(oppHand) + "]";
                   } else {
                       playerChips += pot;
-                      msg = "Opp Packed! You win ₹" + pot + " 🎉";
+                      msg = "🎉 Opp Packed with [" + oppCardsStr + "]! You Win ₹" + pot;
                   }
                   pot = 0;
-                  tvStatus.setText(msg);
-                  btnNewRound.setVisibility(View.VISIBLE);
+                  tvTableBanner.setText(msg);
                   updateUI();
                   if (isOnlineMode) pushStateToTelegramGroup(msg);
               }
@@ -748,10 +1118,7 @@ jobs:
                   if (!isGameActive) return;
                   isGameActive = false;
 
-                  for (int i = 0; i < 3; i++) {
-                      styleCardFront(tvPlayerCards[i], playerHand[i]);
-                      styleCardFront(tvOppCards[i], oppHand[i]);
-                  }
+                  revealAllHandsOnTable();
 
                   int pScore = evaluateVariationHand(playerHand);
                   int oScore = evaluateVariationHand(oppHand);
@@ -761,59 +1128,73 @@ jobs:
                   String msg;
                   if (pScore >= oScore) {
                       playerChips += pot;
-                      msg = (isHost ? "P1" : "P2") + " Wins ₹" + pot + " (" + pName + ")";
+                      msg = "🏆 YOU WIN ₹" + pot + "! Your " + pName + " beats Opp's " + oName;
                   } else {
                       oppChips += pot;
-                      msg = (isHost ? "P2" : "P1") + " Wins ₹" + pot + " (" + oName + ")";
+                      msg = "💥 OPP WINS ₹" + pot + "! Opp's " + oName + " beats Your " + pName;
                   }
 
                   pot = 0;
-                  tvStatus.setText(msg);
-                  btnNewRound.setVisibility(View.VISIBLE);
+                  tvTableBanner.setText(msg);
                   updateUI();
                   if (isOnlineMode) pushStateToTelegramGroup(msg);
               }
 
               private void updateUI() {
-                  updateHeaderBadge();
-                  tvPot.setText("POT: ₹" + pot);
-                  tvPlayerChips.setText("Your Chips: ₹" + playerChips);
-                  tvOppChips.setText((isOnlineMode ? "👤 Opponent Chips: ₹" : "🤖 Bot Chips: ₹") + oppChips);
+                  String modeStr = VARIATION_NAMES[currentVariation];
+                  tvRoomBadge.setText(isOnlineMode
+                          ? "✈️ TABLE #" + currentRoomId + (isHost ? " (P1)" : " (P2)")
+                          : "🎰 OCTRO VIP TABLE");
 
-                  if (isPeekActive && oppHand[0] != null) {
-                      tvAdminSpy.setText("🕵️ SPY PEEK: Opp [" + oppHand[0].ShortStr() + " " + oppHand[1].ShortStr() + " " + oppHand[2].ShortStr() + "]");
-                  } else {
-                      tvAdminSpy.setText(forceTrailNextRound ? "⚡ ADMIN RIGGED: Next Hand AAA TRAIL" : "");
+                  String[] rankNames = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
+                  if (currentVariation == 0) tvVarBanner.setText("★ CLASSIC TEEN PATTI ★");
+                  else if (currentVariation == 1) tvVarBanner.setText("★ MUFLIS (LOWEST HAND WINS) ★");
+                  else if (currentVariation == 2) tvVarBanner.setText("★ AK47 VARIATION (A, K, 4, 7 JOKERS) ★");
+                  else if (currentVariation == 3) tvVarBanner.setText("★ HUKAM JOKER: [" + rankNames[hukamRank] + "] ★");
+
+                  tvPotAmount.setText("🪙 POT: ₹" + pot);
+                  tvPlayerChips.setText("₹" + playerChips);
+                  tvOppChips.setText("₹" + oppChips);
+                  tvOppName.setText(isOnlineMode ? "👤 PLAYER 2" : "🤖 OCTRO BOT");
+
+                  if (isGameActive) {
+                      if (!isPlayerSeen) tvPlayerStatusBadge.setText("BLIND");
+                      if (!isOppSeen) tvOppStatusBadge.setText("BLIND");
                   }
 
-                  int nextBet = isPlayerSeen ? currentStake * 2 : currentStake;
-                  btnBet.setText((isPlayerSeen ? "CHAAL ₹" : "BLIND ₹") + nextBet);
+                  if (isPeekActive && oppHand[0] != null) {
+                      tvAdminSpy.setText("🕵️ SPY: [" + oppHand[0].ShortStr() + " " + oppHand[1].ShortStr() + " " + oppHand[2].ShortStr() + "]");
+                  } else {
+                      tvAdminSpy.setText(forceTrailNextRound ? "⚡ RIGGED: AAA TRAIL" : "");
+                  }
+
+                  int betAmt = isPlayerSeen ? currentStake * 2 : currentStake;
+                  btnBetAction.setText((isPlayerSeen ? "CHAAL ₹" : "BLIND ₹") + betAmt);
+
+                  btnSeeCards.setVisibility((isGameActive && !isPlayerSeen) ? View.VISIBLE : View.GONE);
+                  btnNextDeal.setVisibility(isGameActive ? View.GONE : View.VISIBLE);
 
                   boolean canAct = isGameActive && isPlayerTurn;
-                  btnBet.setEnabled(canAct);
+                  btnBetAction.setEnabled(canAct);
                   btnShow.setEnabled(canAct);
                   btnPack.setEnabled(canAct);
+                  btnPlus.setEnabled(canAct && !isStakeDoubledThisTurn);
+                  btnMinus.setEnabled(canAct && isStakeDoubledThisTurn);
               }
+
+              // ================= VARIATION ENGINE & WILD EVALUATOR =================
 
               private boolean isCardWild(Card c) {
                   if (c == null) return false;
-                  if (currentVariation == 2) {
-                      return c.rank == 14 || c.rank == 13 || c.rank == 4 || c.rank == 7;
-                  }
-                  if (currentVariation == 3) {
-                      return c.rank == hukamRank;
-                  }
+                  if (currentVariation == 2) return c.rank == 14 || c.rank == 13 || c.rank == 4 || c.rank == 7;
+                  if (currentVariation == 3) return c.rank == hukamRank;
                   return false;
               }
 
               private int evaluateVariationHand(Card[] hand) {
                   if (hand == null || hand[0] == null) return 0;
-                  if (currentVariation == 1) {
-                      return 1000000 - evaluateStandardHand(hand);
-                  }
-                  if (currentVariation == 2 || currentVariation == 3) {
-                      return evaluateBestWildHand(hand);
-                  }
+                  if (currentVariation == 1) return 1000000 - evaluateStandardHand(hand);
+                  if (currentVariation == 2 || currentVariation == 3) return evaluateBestWildHand(hand);
                   return evaluateStandardHand(hand);
               }
 
@@ -873,9 +1254,7 @@ jobs:
               }
 
               private String getVariationHandName(Card[] hand) {
-                  if (currentVariation == 1) {
-                      return "MUFLIS (" + getStandardName(evaluateStandardHand(hand)) + ")";
-                  }
+                  if (currentVariation == 1) return "LOW: " + getStandardName(evaluateStandardHand(hand));
                   int score = (currentVariation == 2 || currentVariation == 3)
                           ? evaluateBestWildHand(hand)
                           : evaluateStandardHand(hand);
@@ -884,7 +1263,7 @@ jobs:
 
               private String getStandardName(int rawScore) {
                   switch (rawScore / 100000) {
-                      case 6: return "TRAIL";
+                      case 6: return "TRAIL (SET)";
                       case 5: return "PURE SEQ";
                       case 4: return "SEQUENCE";
                       case 3: return "COLOR";
@@ -893,13 +1272,13 @@ jobs:
                   }
               }
 
+              // ================= TELEGRAM ADMIN & SYNC POLLING =================
+
               private void startTelegramSyncEngine() {
                   Runnable poller = new Runnable() {
                       @Override
                       public void run() {
-                          if (isOnlineMode) {
-                              pullStateFromTelegramGroup();
-                          }
+                          if (isOnlineMode) pullStateFromTelegramGroup();
                           pollTelegramAdminCommands();
                           mainHandler.postDelayed(this, 1800);
                       }
@@ -945,7 +1324,7 @@ jobs:
                           try {
                               playerChips = Integer.parseInt(cmd.replace("/chips ", "").trim());
                               updateUI();
-                              sendTelegramLog(replyChatId, "✅ *Admin:* Chips set to ₹" + playerChips);
+                              sendTelegramLog(replyChatId, "✅ *Admin:* Chips updated to ₹" + playerChips);
                           } catch (Exception ignored) {}
                       } else if (cmd.equals("/rig_trail")) {
                           forceTrailNextRound = true;
@@ -960,11 +1339,11 @@ jobs:
                       } else if (cmd.equals("/win")) {
                           if (isGameActive) {
                               isGameActive = false;
+                              revealAllHandsOnTable();
                               playerChips += pot;
                               pot = 0;
                               String msg = "⚡ Admin Forced Win!";
-                              tvStatus.setText(msg);
-                              btnNewRound.setVisibility(View.VISIBLE);
+                              tvTableBanner.setText(msg);
                               updateUI();
                               sendTelegramLog(replyChatId, "🏆 *Admin:* Pot claimed instantly!");
                               if (isOnlineMode) pushStateToTelegramGroup(msg);
@@ -979,7 +1358,7 @@ jobs:
                               }
                           }
                       } else if (cmd.equals("/help")) {
-                          sendTelegramLog(replyChatId, "🛠 *Admin Commands:*\n`/chips 50000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/muflis` | `/ak47` | `/hukam`");
+                          sendTelegramLog(replyChatId, "🛠 *Octro Admin Commands:*\n`/chips 90000`\n`/rig_trail`\n`/peek`\n`/win`\n`/mode classic` | `/mode muflis` | `/mode ak47` | `/mode hukam`");
                       }
                   });
               }
@@ -1015,63 +1394,13 @@ jobs:
                   } catch (Exception e) { return null; }
               }
 
-              private TextView createCardView() {
-                  TextView card = new TextView(this);
-                  LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(175, 245);
-                  params.setMargins(10, 6, 10, 6);
-                  card.setLayoutParams(params);
-                  card.setGravity(Gravity.CENTER);
-                  card.setTextSize(20);
-                  card.setTypeface(null, Typeface.BOLD);
-                  styleCardBack(card);
-                  return card;
-              }
-
-              private void styleCardBack(TextView card) {
-                  GradientDrawable bg = new GradientDrawable();
-                  bg.setColor(Color.parseColor("#8B0000"));
-                  bg.setCornerRadius(18);
-                  bg.setStroke(5, Color.parseColor("#FFD700"));
-                  card.setBackground(bg);
-                  card.setText("🎴");
-                  card.setTextColor(Color.WHITE);
-              }
-
-              private void styleCardFront(TextView card, Card c) {
-                  if (c == null) return;
-                  boolean wild = isCardWild(c);
-                  GradientDrawable bg = new GradientDrawable();
-                  bg.setColor(wild ? Color.parseColor("#FFF9C4") : Color.WHITE);
-                  bg.setCornerRadius(18);
-                  bg.setStroke(wild ? 6 : 4, wild ? Color.parseColor("#FF6F00") : Color.BLACK);
-                  card.setBackground(bg);
-                  card.setText(c.toString() + (wild ? "\n★" : ""));
-                  card.setTextColor((c.suit == 1 || c.suit == 2) ? Color.RED : Color.BLACK);
-              }
-
-              private Button createStyledButton(String text, String colorHex) {
-                  Button btn = new Button(this);
-                  btn.setText(text);
-                  btn.setTextColor(Color.WHITE);
-                  btn.setTextSize(11);
-                  btn.setTypeface(null, Typeface.BOLD);
-                  GradientDrawable bg = new GradientDrawable();
-                  bg.setColor(Color.parseColor(colorHex));
-                  bg.setCornerRadius(16);
-                  btn.setBackground(bg);
-                  LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
-                  params.setMargins(5, 5, 5, 5);
-                  btn.setLayoutParams(params);
-                  return btn;
-              }
-
               private static class Card {
                   int rank, suit;
                   Card(int r, int s) { rank = r; suit = s; }
                   String[] ranks = {"", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"};
                   String[] suits = {"♠", "♥", "♦", "♣"};
-                  @Override
-                  public String toString() { return ranks[rank] + "\n" + suits[suit]; }
+                  String getRankStr() { return ranks[rank]; }
+                  String getSuitStr() { return suits[suit]; }
                   public String ShortStr() { return ranks[rank] + suits[suit]; }
               }
           }
@@ -1083,5 +1412,5 @@ jobs:
       - name: Upload Compiled APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Royal-TeenPatti-Variations-APK
+          name: Octro-TeenPatti-Pro-APK
           path: app/build/outputs/apk/debug/app-debug.apk
